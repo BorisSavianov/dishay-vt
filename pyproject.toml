@@ -1,0 +1,9 @@
+[project]
+name = "fmi-open-data"
+version = "0.1.0"
+description = "Static data pipeline for the FMI Open Data Hackathon starter"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv]
+package = false
