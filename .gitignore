@@ -9,3 +9,8 @@ dist/
 web/.env*
 !web/.env.example
 .DS_Store
+
+# secrets: never commit
+.env
+.env.*
+!.env.example

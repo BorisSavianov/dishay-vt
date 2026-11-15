@@ -49,8 +49,10 @@ async function callGroq(prompt: string, apiKey: string, model: string, fetchImpl
         { role: 'system', content: SYSTEM },
         { role: 'user', content: prompt },
       ],
-      max_tokens: 200,
+      max_tokens: 1024,
       temperature: 0.2,
+      // gpt-oss models reason before answering; keep it short so the answer fits the token budget.
+      ...(model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {}),
     }),
     signal: AbortSignal.timeout(8000),
   });
@@ -67,7 +69,7 @@ async function callGemini(prompt: string, apiKey: string, model: string, fetchIm
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 200, temperature: 0.2 },
+      generationConfig: { maxOutputTokens: 1024, temperature: 0.2 },
     }),
     signal: AbortSignal.timeout(8000),
   });
@@ -110,13 +112,13 @@ export async function summarize(input: SummaryInput): Promise<SummaryOutput> {
   if (groqKey) {
     attempts.push({
       provider: 'groq',
-      run: () => callGroq(prompt, groqKey, env.GROQ_MODEL ?? 'llama-3.3-70b-versatile', fetchImpl),
+      run: () => callGroq(prompt, groqKey, env.GROQ_MODEL ?? 'openai/gpt-oss-120b', fetchImpl),
     });
   }
   if (geminiKey) {
     attempts.push({
       provider: 'gemini',
-      run: () => callGemini(prompt, geminiKey, env.GEMINI_MODEL ?? 'gemini-2.5-flash', fetchImpl),
+      run: () => callGemini(prompt, geminiKey, env.GEMINI_MODEL ?? 'gemini-3.5-flash', fetchImpl),
     });
   }
 
