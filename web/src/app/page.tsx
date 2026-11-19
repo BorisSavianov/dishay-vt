@@ -48,6 +48,7 @@ export default async function Home({
         <h1>{tr('site.title')}</h1>
         <p>{tr('site.lead')}</p>
         <nav aria-label={tr('lang.label')}>
+          <a href={`/predict?lang=${lang}`}>{tr('nav.predict')}</a> ·{' '}
           <a href="?lang=bg" hrefLang="bg" aria-current={lang === 'bg' ? 'page' : undefined}>
             {tr('lang.bg')}
           </a>{' '}

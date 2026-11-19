@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
+    "ml:kit": "node scripts/sync-ml-kit.mjs",
     "check": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {

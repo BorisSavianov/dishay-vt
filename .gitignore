@@ -14,3 +14,7 @@ web/.env*
 .env
 .env.*
 !.env.example
+
+# ML reports (metrics per training run)
+ml/reports/
+.pytest_cache/

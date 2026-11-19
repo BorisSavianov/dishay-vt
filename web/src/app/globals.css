@@ -218,3 +218,71 @@ button:disabled {
 .sources ul {
   padding-left: 18px;
 }
+
+/* Prediction page */
+.form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-bottom: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.field input,
+.field select {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  min-width: 0;
+}
+
+.field small {
+  color: var(--muted);
+}
+
+.bars {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+
+.bars li {
+  display: grid;
+  grid-template-columns: minmax(80px, 30%) 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.bar {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--accent);
+  min-width: 2px;
+}
+
+.metrics {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 480px;
+}
+
+.metrics th,
+.metrics td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.metrics td {
+  font-variant-numeric: tabular-nums;
+}
