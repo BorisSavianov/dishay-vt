@@ -2,6 +2,8 @@
 
 A Next.js app for Vercel with Neon Postgres. Groq (primary) and Gemini (fallback) write short summaries of the figures. A Python pipeline (standard library only) turns public data into JSON. The same JSON is bundled into the app as a fallback and seeded into Neon.
 
+An ML toolkit (`ml/`, scikit-learn) trains a tabular model and exports it to `web/src/model/model.json`. The app serves it at `/api/model` and `/api/predict` to the web page `/predict` and to the mobile app. Until the topic is known, this is a placeholder model trained on toy data, and the app labels it as such.
+
 Live URL: not deployed yet. See "Deploy" below.
 
 ## Run locally
@@ -24,6 +26,15 @@ pnpm build
 ```
 
 Run `uv run python -m pipeline.fetch` first on a new machine to download the raw files (needs network).
+
+ML commands. The steps for the day are in `docs/ml-playbook.md`.
+
+```bash
+uv run --group ml pytest -q                                           # toolkit tests
+uv run --group ml python -m ml.inspect data/raw/<file>.csv            # first look at a dataset
+uv run --group ml python -m ml.train --data <file> --target <column>  # writes web/src/model/model.json
+uv run --group ml python -m ml.parity                                 # after editing ml/preprocess.py or ml/export.py
+```
 
 ## Database (Neon)
 
@@ -60,11 +71,15 @@ Owner: Boris. Git integration deploys the private GitHub repo.
 
 - `pipeline/` Python: `config.py` sources, `fetch.py` downloads, `build.py` writes JSON.
 - `data/raw/` cached downloads (git-ignored). `data/processed/` the JSON, committed.
-- `contract/CONTRACT.md` the JSON shapes. `web/src/lib/types.ts` must match them.
+- `contract/CONTRACT.md` the JSON shapes, including the ML API. `web/src/lib/types.ts` and `web/src/lib/ml/types.ts` must match them.
 - `web/src/app/` pages and the `/api/summary` route. `web/src/lib/` data, facts, AI calls, store.
 - `web/db/schema.sql` the three tables. `web/scripts/seed.ts` loads the data.
 - `docs/sources.md` what each source is, its licence and quirks.
+- `ml/` Python: `data.py` loading, `preprocess.py` exportable preprocessing, `train.py` training and evaluation, `export.py` JSON export, `fixture.py` the placeholder model, `parity.py` cross-language test cases.
+- `web/src/model/model.json` the served model. `web/src/lib/ml/` its TypeScript evaluator, validation, client and hooks. `web/src/app/api/model` and `web/src/app/api/predict` the routes; `web/src/app/predict` the page.
+- `mobile-kit/` the ML client files for the mobile app. `pnpm ml:kit` in `web/` refreshes them.
+- `docs/ml-playbook.md` the ML steps for the day.
 
 ## Not in this version
 
-No mobile app. No user accounts. No free-text AI questions. Mobile stays a no-go.
+No user accounts. No free-text AI questions. The mobile app lives in its own project and calls this app's ML API through `mobile-kit/`.
