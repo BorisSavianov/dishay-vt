@@ -1,0 +1,95 @@
+// ML API contract shared by the web app and the mobile app.
+// mobile-kit/ml/types.ts is a byte-for-byte copy (run `pnpm ml:kit`); kit.test.ts fails if they drift.
+// Shapes are documented in contract/CONTRACT.md. Change them only after telling the whole team.
+
+export type Task = 'regression' | 'classification';
+export type ModelKind = 'fixture' | 'trained';
+
+export type NumberFeature = {
+  name: string;
+  type: 'number';
+  required: boolean;
+  impute: number;
+  min: number | null;
+  max: number | null;
+};
+
+export type CategoryFeature = {
+  name: string;
+  type: 'category';
+  required: boolean;
+  impute: string;
+  categories: string[];
+};
+
+export type FeatureSpec = NumberFeature | CategoryFeature;
+
+export type ModelMeta = { source: string; as_of: string; license: string; generated_at: string };
+
+export type Metrics = Record<string, number | null>;
+
+export type ModelInfo = {
+  schema_version: 1;
+  name: string;
+  version: string;
+  kind: ModelKind;
+  algorithm: string;
+  task: Task;
+  trained_at: string;
+  target: { name: string; unit: string | null; classes?: string[] };
+  features: FeatureSpec[];
+  metrics: {
+    primary: string;
+    model: Metrics;
+    baseline: Metrics;
+    rows: { train: number; test: number };
+    split: string;
+    refit_on_all_rows: boolean;
+  };
+  importances: { feature: string; value: number }[];
+  meta: ModelMeta;
+};
+
+export type ModelRef = {
+  name: string;
+  version: string;
+  kind: ModelKind;
+  algorithm: string;
+  unit: string | null;
+};
+
+export type InputValue = number | string | boolean | null;
+export type InputRow = Record<string, InputValue | undefined>;
+
+export type RegressionPrediction = { value: number };
+export type ClassPrediction = { label: string; probabilities: Record<string, number> };
+export type Prediction = RegressionPrediction | ClassPrediction;
+
+// One test on the path through a single decision tree, in the units the client sent.
+export type DecisionStep =
+  | { feature: string; op: '<=' | '>'; threshold: number; input: number }
+  | { feature: string; op: '=' | '!='; value: string; input: string };
+
+export type Issue = { row?: number; field?: string; issue: string };
+
+export type PredictRequest = { inputs: InputRow | InputRow[] };
+
+export type PredictResponse = {
+  ok: true;
+  task: Task;
+  predictions: Prediction[];
+  // Present only when the model is a single decision tree: one path per input row.
+  explanations?: DecisionStep[][];
+  warnings: Issue[];
+  model: ModelRef;
+};
+
+export type ModelInfoResponse = { ok: true; model: ModelInfo };
+
+export type ErrorCode = 'invalid_json' | 'invalid_input' | 'too_large' | 'model_unavailable';
+
+export type ApiErrorBody = { ok: false; error: { code: ErrorCode; message: string; details?: Issue[] } };
+
+export function isClassPrediction(p: Prediction): p is ClassPrediction {
+  return 'label' in p;
+}
