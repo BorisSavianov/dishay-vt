@@ -86,6 +86,7 @@ def build(now: dt.datetime) -> dict:
                 "pm10_mean": r1(pm10m),
                 "pm25_mean": r1(pm25m),
                 "level": level_of(pm25m, pm10m),
+                "alert_level": max(level_of(pm25m, pm10m), level_of(pm25m * 1.25, pm10m * 1.25)),
                 "exceeds_eu_limit": pm10m > EU_PM10_DAILY_LIMIT,
                 "reasons": reasons,
             })

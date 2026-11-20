@@ -109,7 +109,7 @@ Written by `ml/aq_forecast.py` on Teodor's PC every hour, upserted into Neon and
     "latest": { "t": "2026-11-20T10:55:00+02:00", "pm25": 18.2, "pm10": 31.0 },   // or null
     "hourly": [ { "t": "2026-11-20T11:00:00+02:00", "pm25": 19.1, "pm10": 33.0,
                   "pm25_lo": 14.0, "pm25_hi": 25.0, "cams_pm25": 16.0 } ],      // 72 items, next hour first
-    "daily": [ { "date": "2026-11-21", "pm10_mean": 58.0, "pm25_mean": 34.0, "level": 3,
+    "daily": [ { "date": "2026-11-21", "pm10_mean": 58.0, "pm25_mean": 34.0, "level": 3, "alert_level": 4,
                  "exceeds_eu_limit": true,
                  "reasons": [ { "feature": "pbl_height", "label_bg": "нисък слой на смесване (инверсия)",
                                 "label_en": "low mixing layer (inversion)", "impact": 11.2 } ] } ]  // 3 days
@@ -122,6 +122,7 @@ Written by `ml/aq_forecast.py` on Teodor's PC every hour, upserted into Neon and
 - `pm25_lo` / `pm25_hi` are the 10th and 90th percentiles. `lo <= pm25 <= hi` always.
 - `level` is the EEA EAQI 1..6 of the daily means: the worse of the PM2.5 and PM10 bands. Band edges: `mobile/src/aq/levels.ts` (`PM25_BANDS`, `PM10_BANDS`); `ml/aq_levels.py` mirrors them and a test fails if they drift. The web should use the same numbers.
 - `exceeds_eu_limit` is `pm10_mean > 50`.
+- `alert_level` (optional, 1..6, always `>= level`): **the level the alerts use.** It is the EAQI of the upper-middle of the forecast band (about the 70th percentile of the day), because missing a smog day costs more than a false alarm. On the winter 2025/26 holdout in VT, day-before warnings at level 3 with `alert_level` caught 18 of 23 bad days with 14 false alarms (CAMS: 20 caught, 23 false; `level`: 9 caught, 4 false). Show `level` as the forecast; decide push alerts and "risky for sensitive groups" badges with `alert_level ?? level`.
 - `reasons`: up to 3 per day, largest `|impact|` first. `impact` is the µg/m³ the feature group adds (positive) or removes (negative) from the day's PM2.5. `feature` is one of `pbl_height`, `wind_speed`, `temp`, `rh`, `precip`, `persistence`, `neighbours`, `cams`, `calendar`. `label_en` is optional.
 - Ids: `sc-<sensor.community sensor id>`. `featured` marks the Veliko Tarnovo stations shown first (within 10 km of the centre).
 - Levels: the EEA defines the index on hourly values (airindex.eea.europa.eu, 2024 revision); `daily[].level` applies the same bands to the daily means.
