@@ -1,175 +1,61 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { DayCards } from '@/components/aq/DayCards';
-import { ExplainCard } from '@/components/aq/ExplainCard';
-import { ForecastChart } from '@/components/aq/ForecastChart';
-import { LevelChip } from '@/components/aq/Level';
-import { StationPicker } from '@/components/aq/StationPicker';
-import { AppShell } from '@/components/shell/AppShell';
-import { Icon } from '@/components/shell/Icon';
-import { clockLabel, fmtPm, hourLabel, sofiaDate } from '@/lib/aq/format';
-import { levelNow, PROFILES, type Profile } from '@/lib/aq/levels';
-import { whatIfLine } from '@/lib/aq/sources';
-import { t } from '@/lib/i18n';
-import { featuredStation, loadForecast } from '@/lib/aq/load';
-import { advice, air, profileName, type AirKey } from '@/lib/aq/strings';
+import { Chapters } from '@/components/story/Chapters';
+import { CtaCards } from '@/components/story/CtaCards';
+import { EpisodeClock } from '@/components/story/EpisodeClock';
+import { PhoneAlert } from '@/components/story/PhoneAlert';
+import { SensorStats } from '@/components/story/SensorStats';
+import { TodayCard } from '@/components/story/TodayCard';
+import { TopBar } from '@/components/story/TopBar';
+import { FORECAST_HREF } from '@/lib/story/routes';
+import { StoryClient } from '@/components/story/StoryClient';
+import css from '@/components/story/story.module.css';
+import { readEpisode } from '@/lib/aq/episode';
+import { loadForecast } from '@/lib/aq/load';
 import { langOf, withLang } from '@/lib/page';
+import { buildStoryData } from '@/lib/story/facts';
+import { story } from '@/lib/story/strings';
 
 export const dynamic = 'force-dynamic';
 
-type Params = Promise<{ lang?: string | string[]; station?: string | string[]; profile?: string | string[] }>;
+type Params = Promise<{ lang?: string | string[] }>;
 
 export async function generateMetadata({ searchParams }: { searchParams: Params }): Promise<Metadata> {
   const lang = langOf(await searchParams);
-  return { title: air(lang, 'web.title'), description: air(lang, 'web.lead') };
+  const title = story(lang, 'meta.title');
+  const description = story(lang, 'meta.description');
+  // The OG card is the chapter 1 poster: the valley at dusk, straight from the 3D scene.
+  const images = [{ url: '/story/ch1.webp', width: 1600, height: 1000, alt: title }];
+  return {
+    title,
+    description,
+    openGraph: { title, description, images, type: 'website' },
+    twitter: { card: 'summary_large_image', title, description, images },
+  };
 }
 
-export default async function AirNow({ searchParams }: { searchParams: Params }) {
-  const params = await searchParams;
-  const lang = langOf(params);
-  const tr = (key: AirKey, vars?: Record<string, string | number>) => air(lang, key, vars);
-  const { source, forecast } = await loadForecast();
-
-  const station = forecast.stations.find((s) => s.id === params.station) ?? featuredStation(forecast);
-  const profile: Profile = PROFILES.find((p) => p === params.profile) ?? 'asthma';
-  const now = new Date();
-  const today = sofiaDate(now);
-  const tomorrow = sofiaDate(new Date(now.getTime() + 24 * 3600_000));
-  const current = levelNow(station, now);
-  const hourly = (station.hourly ?? []).filter((h) => new Date(h.t).getTime() >= now.getTime() - 3600_000);
-  const days = station.daily.filter((d) => d.date >= today).slice(0, 3);
-  const m = forecast.model;
-  const modelReady = source !== 'demo' && m.mae.model > 0;
-  // The card is about Veliko Tarnovo: this season with the real weather forecast if we have it, else last winter's.
-  const season = m.scoreboard?.replay;
-  const vtSeason = season?.mae_pm25_next_day.vt;
-  const vtWinter = m.mae_vt ?? m.mae;
-  const whatIf = station.daily.some((d) => d.sources) && m.sources_what_if ? whatIfLine(m.sources_what_if, lang) : null;
-  const short = (d: string) => `${Number(d.slice(8, 10))}.${Number(d.slice(5, 7))}`;
-
+export default async function StoryPage({ searchParams }: { searchParams: Params }) {
+  const lang = langOf(await searchParams);
+  const episode = readEpisode();
+  const data = buildStoryData(await loadForecast(), episode, lang, new Date());
+  const slots = {
+    ch2: <EpisodeClock lang={lang} hourly={data.episodeHourly} />,
+    ch3: <SensorStats lang={lang} readings={data.facts.readings} sources={data.facts.sourcesCount} />,
+    ch4: <PhoneAlert lang={lang} episode={episode} />,
+    ch7: <TodayCard lang={lang} today={data.today} />,
+    ch8: <CtaCards lang={lang} forecastHref={FORECAST_HREF} />,
+  };
   return (
-    <AppShell
-      lang={lang}
-      active="dashboard"
-      title={tr('air.title')}
-      lead={tr('web.lead')}
-      updated={forecast.generated_at}
-    >
-      {source === 'demo' && (
-        <p className="notice" role="status">
-          {tr('air.demo')}
-        </p>
-      )}
-      {source === 'bundled' && (
-        <p className="notice" role="status">
-          {tr('web.bundled')}
-        </p>
-      )}
-
-      <div className="air-top">
-        <section className="card air-now" aria-labelledby="now-title">
-          <div className="card-head">
-            <div>
-              <p className="eyebrow">{station.city}</p>
-              <h2 className="card-title" id="now-title">
-                {station.name}
-              </h2>
-            </div>
-            <span className="pill">{tr('web.generated', { time: hourLabel(lang, forecast.generated_at) })}</span>
-          </div>
-          {current ? (
-            <>
-              <LevelChip big level={current.level} lang={lang} />
-              <p className="air-now-pm">
-                {tr('web.now.pm', { pm25: fmtPm(lang, current.pm25), pm10: fmtPm(lang, current.pm10) })}
-                <span> · {current.measured ? tr('air.now.measured') : tr('air.now.forecast')}</span>
-              </p>
-              <p className="air-advice">
-                <strong>{profileName(lang, profile)}:</strong> {advice(lang, profile, current.level)}
-              </p>
-            </>
-          ) : (
-            <p className="air-now-pm">{tr('web.now.none')}</p>
-          )}
-
-          <StationPicker stations={forecast.stations} station={station.id} profile={profile} lang={lang} action="/" />
-        </section>
-
-        <aside className="card insight air-model" aria-labelledby="model-title">
-          <h2 className="card-title" id="model-title">
-            <Icon name="sparkle" />
-            {tr('web.model.title')}
-          </h2>
-          <p className="insight-text">
-            {!modelReady
-              ? tr('web.model.pending')
-              : season && vtSeason
-                ? tr('web.model.season', {
-                    from: short(season.from),
-                    to: short(season.to),
-                    model: fmtPm(lang, vtSeason.model),
-                    cams: fmtPm(lang, vtSeason.cams),
-                  })
-                : tr('web.model.vt', {
-                    model: fmtPm(lang, vtWinter.model),
-                    cams: fmtPm(lang, vtWinter.cams),
-                    persistence: fmtPm(lang, vtWinter.persistence),
-                  })}
-          </p>
-          <Link className="btn insight-cta" href={withLang('/why', lang)}>
-            {tr('web.model.cta')}
-            <Icon name="arrow" />
-          </Link>
-        </aside>
-      </div>
-
-      {hourly.length > 1 && (
-        <section className="card air-chart">
-          <ForecastChart
-            hourly={hourly}
-            lang={lang}
-            labels={{
-              title: tr('air.chart.title'),
-              subtitle: tr('air.chart.sub'),
-              pollutant: tr('web.chart.pm'),
-              ours: tr('air.chart.ours'),
-              cams: tr('air.chart.cams'),
-              band: tr('web.chart.band'),
-              alt: tr('web.chart.alt', { pm: '{pm}', name: station.name }),
-              table: tr('web.chart.table'),
-              hour: tr('web.chart.hour'),
-              now: tr('web.chart.now'),
-              camsNote: tr('web.chart.camsnote'),
-              readout: tr('web.chart.readout', { time: '{time}', value: '{value}' }),
-            }}
-          />
-          <p className="note">
-            {tr('air.source')} · {clockLabel(lang, forecast.generated_at)}
-          </p>
-        </section>
-      )}
-
-      {days.length > 0 && <DayCards days={days} lang={lang} today={today} tomorrow={tomorrow} />}
-      {whatIf && <p className="note what-if">{whatIf}</p>}
-
-      <ExplainCard
-        station={station.id}
-        profile={profile}
-        lang={lang}
-        labels={{
-          title: tr('ex.title'),
-          sub: tr('ex.sub'),
-          button: tr('ex.button', { profile: profileName(lang, profile) }),
-          loading: tr('ex.loading'),
-          error: tr('ex.error'),
-          cached: t(lang, 'summary.cached'),
-          provider: {
-            groq: t(lang, 'summary.provider.groq'),
-            gemini: t(lang, 'summary.provider.gemini'),
-            mock: t(lang, 'summary.provider.mock'),
-          },
-        }}
-      />
-    </AppShell>
+    <main className={css.story} lang={lang}>
+      <StoryClient data={data}>
+        <div className={css.content}>
+          <Chapters data={data} slots={slots} />
+          <footer className={css.footer}>
+            <p>{story(lang, 'foot.sources')}</p>
+            <a href={withLang('/about', lang)}>{story(lang, 'foot.method')}</a>
+          </footer>
+        </div>
+        <TopBar lang={lang} forecastHref={FORECAST_HREF} />
+      </StoryClient>
+    </main>
   );
 }

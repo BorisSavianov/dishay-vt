@@ -73,6 +73,7 @@ Owner: Boris. Git integration deploys the private GitHub repo.
 - `web/src/data/region_veliko_tarnovo.json` the province outline, bundled with both apps (not in the database).
 - `data/raw/` cached downloads (git-ignored). `data/processed/` the JSON, committed.
 - `contract/CONTRACT.md` the JSON shapes, including the ML API. `web/src/lib/types.ts` and `web/src/lib/ml/types.ts` must match them.
+- `/` is the story (the 3D landing page: `web/src/components/story/`, `web/src/lib/story/`; `pnpm story:terrain` in `web/` re-bakes the terrain), `/now` the live forecast dashboard.
 - `web/src/app/` pages (Dashboard, Geographic Explorer, Health, AI Insights, Prediction, Datasets and Sources, Methodology and About), `/api/summary`, `/api/export/<dataset>` (CSV), `/api/model` and `/api/predict`. `web/src/lib/` data, metrics, facts, AI calls, store.
 - `ml/` Python: `data.py` loading, `preprocess.py` exportable preprocessing, `train.py` training and evaluation, `export.py` JSON export, `fixture.py` the placeholder model, `parity.py` cross-language test cases.
 - `web/src/model/model.json` the served model. `web/src/lib/ml/` its TypeScript evaluator, validation, client and hooks.

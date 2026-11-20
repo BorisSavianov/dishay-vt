@@ -11,7 +11,7 @@ import { BrandMark, Icon, type IconName } from './Icon';
 import { DocLang, LangSwitch } from './LangSwitch';
 import { ThemeToggle } from './ThemeToggle';
 
-export type NavId = 'dashboard' | 'geo' | 'why' | 'health' | 'ai' | 'predict' | 'sources' | 'about';
+export type NavId = 'story' | 'dashboard' | 'geo' | 'why' | 'health' | 'ai' | 'predict' | 'sources' | 'about';
 
 type NavItem = { id: NavId; href: string; label: MessageKey; tab?: MessageKey; icon: IconName };
 
@@ -19,7 +19,7 @@ const GROUPS: { label: MessageKey; items: NavItem[] }[] = [
   {
     label: 'nav.overview',
     items: [
-      { id: 'dashboard', href: '/', label: 'nav.dashboard', tab: 'tab.dashboard', icon: 'home' },
+      { id: 'dashboard', href: '/now', label: 'nav.dashboard', tab: 'tab.dashboard', icon: 'home' },
       { id: 'geo', href: '/geographic', label: 'nav.geo', tab: 'tab.map', icon: 'map' },
       { id: 'why', href: '/why', label: 'nav.why', tab: 'tab.why', icon: 'trendDown' },
       { id: 'ai', href: '/insights', label: 'nav.ai', tab: 'tab.ai', icon: 'sparkle' },
@@ -30,6 +30,7 @@ const GROUPS: { label: MessageKey; items: NavItem[] }[] = [
     items: [
       { id: 'sources', href: '/sources', label: 'nav.sources', tab: 'tab.data', icon: 'database' },
       { id: 'about', href: '/about', label: 'nav.about', icon: 'info' },
+      { id: 'story', href: '/', label: 'nav.story', icon: 'arrow' },
     ],
   },
 ];
@@ -70,7 +71,7 @@ export function AppShell({
     </>
   );
   const brand = (
-    <Link className="brand" href={withLang('/', lang)}>
+    <Link className="brand" href={withLang('/now', lang)}>
       <BrandMark />
       <span>{tr('brand.name')}</span>
     </Link>

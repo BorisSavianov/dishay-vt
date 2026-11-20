@@ -1,0 +1,172 @@
+/* Fixed chrome around the story: top bar and chapter rail. */
+.rail {
+  position: fixed;
+  right: clamp(10px, 2vw, 28px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: grid;
+  gap: 4px;
+}
+
+.dot {
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.dot::before {
+  content: '';
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 0 1px rgba(10, 11, 36, 0.35);
+  transition:
+    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.4s;
+}
+
+.dot:hover::before {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.dot[aria-current='step']::before {
+  background: #ffb15c;
+  transform: scale(1.6);
+}
+
+@media (max-width: 560px) {
+  .rail {
+    right: 4px;
+  }
+}
+
+.bar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px clamp(12px, 3vw, 28px);
+  color: #f4f5ff;
+  background: linear-gradient(180deg, rgba(8, 9, 28, 0.55), rgba(8, 9, 28, 0));
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  color: inherit;
+}
+
+.mark {
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: 7px;
+  background:
+    radial-gradient(circle at 30% 30%, #ffb15c 0 22%, transparent 23%),
+    linear-gradient(135deg, #6d66ff, #2c2a7a);
+  box-shadow: 0 0 18px rgba(109, 102, 255, 0.6);
+}
+
+.barEnd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.barEnd :global(.seg) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.barEnd :global(.seg a) {
+  color: #f4f5ff;
+}
+
+.live {
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 650;
+  text-decoration: none;
+  color: #0b0c22;
+  background: #ffb15c;
+  box-shadow: 0 8px 24px -10px rgba(255, 177, 92, 0.8);
+  white-space: nowrap;
+}
+
+.brandText {
+  white-space: nowrap;
+}
+
+/* On phones the cards are taller than the screen and scroll under the bar: give it a frosted backing. */
+@media (max-width: 720px) {
+  .bar {
+    background: rgba(8, 9, 28, 0.55);
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  }
+}
+
+@media (max-width: 480px) {
+  .brandText {
+    display: none;
+  }
+
+  .live {
+    padding: 7px 10px;
+    font-size: 0.78rem;
+  }
+}
+
+/* Daylight chapters (7–8): the chrome follows the light glass cards. */
+.bar {
+  transition:
+    color 0.6s,
+    background 0.6s;
+}
+
+.bar.day {
+  color: #14152e;
+  background: linear-gradient(180deg, rgba(246, 247, 255, 0.75), rgba(246, 247, 255, 0));
+}
+
+.bar.day .barEnd :global(.seg) {
+  background: rgba(20, 21, 46, 0.06);
+  border-color: rgba(20, 21, 46, 0.14);
+}
+
+.bar.day .barEnd :global(.seg a) {
+  color: #14152e;
+}
+
+.rail.day .dot::before {
+  background: rgba(20, 21, 46, 0.3);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+.rail.day .dot:hover::before {
+  background: rgba(20, 21, 46, 0.6);
+}
+
+@media (max-width: 720px) {
+  .bar.day {
+    background: rgba(246, 247, 255, 0.72);
+  }
+}
+
+.rail.day .dot[aria-current='step']::before {
+  background: #e8892b;
+}
