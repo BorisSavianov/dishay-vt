@@ -40,7 +40,9 @@ export async function fetchForecast(needHourly: string[] = []): Promise<{ data: 
           }
         }),
     );
-    return { data, source: 'live' };
+    // The API also serves invented numbers (mock model or no forecast at all): label them as demo.
+    const demo = data.source === 'demo' || data.model.kind === 'mock';
+    return { data, source: demo ? 'demo' : 'live' };
   } catch (e) {
     return { data: demoForecast(), source: 'demo', error: e instanceof Error ? e.message : String(e) };
   }
