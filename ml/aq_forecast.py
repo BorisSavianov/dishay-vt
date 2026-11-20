@@ -242,9 +242,14 @@ def run_once(write_db: bool = True) -> dict:
             if m.sum() < 12:
                 continue
             m25, m10 = r1(p25[sl][m].mean()), r1(p10[sl][m].mean())
+            # Alerts use the upper-middle of the band (~70th percentile): see CONTRACT.md "alert_level".
+            mid25 = (p25[sl][m].mean() + hi[sl][m].mean()) / 2
+            mid10 = mid25 * (p10[sl][m].mean() / max(p25[sl][m].mean(), 0.1))
             impacts = {g: float(v[sl][m].mean()) for g, v in why.items() if g in REASON_GROUPS}
             top = sorted(impacts.items(), key=lambda kv: -abs(kv[1]))[:3]
-            daily.append({"date": day.isoformat(), "pm10_mean": m10, "pm25_mean": m25, "level": level_of(m25, m10),
+            lvl = level_of(m25, m10)
+            daily.append({"date": day.isoformat(), "pm10_mean": m10, "pm25_mean": m25, "level": lvl,
+                          "alert_level": max(lvl, level_of(mid25, mid10)),
                           "exceeds_eu_limit": m10 > EU_PM10_DAILY_LIMIT,
                           "reasons": [reason(g, v) for g, v in top if abs(v) >= 0.05]})
         lt = None

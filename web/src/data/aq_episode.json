@@ -7,7 +7,14 @@
  "score": {
   "days": 178,
   "bad_days": 23,
-  "model": {
+  "model_alert": {
+   "hits": 18,
+   "misses": 5,
+   "false_alarms": 14,
+   "pod": 0.78,
+   "far": 0.44
+  },
+  "model_level": {
    "hits": 9,
    "misses": 14,
    "false_alarms": 4,
@@ -22,7 +29,7 @@
    "far": 0.53
   },
   "worst10": {
-   "model_warned": 6,
+   "model_warned": 9,
    "cams_warned": 10
   }
  },
@@ -208,6 +215,7 @@
     "pm10_mean": 43.2,
     "pm25_mean": 23.1,
     "level": 3,
+    "alert_level": 3,
     "exceeds_eu_limit": false
    }
   },
@@ -392,6 +400,7 @@
     "pm10_mean": 41.2,
     "pm25_mean": 19.3,
     "level": 3,
+    "alert_level": 3,
     "exceeds_eu_limit": false
    }
   }

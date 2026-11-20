@@ -94,8 +94,12 @@ def main() -> None:
         if f is None:
             continue
         c25, c10 = cams_day(f["hours"])
+        m25, m10, h25 = float(f["pm25"].mean()), float(f["pm10"].mean()), float(f["hi"].mean())
+        ratio = m10 / max(m25, 0.1)
         rows.append({"date": dte, "obs_level": level_of(o.pm25, o.pm10), "obs25": o.pm25, "obs10": o.pm10,
-                     "model_level": level_of(float(f["pm25"].mean()), float(f["pm10"].mean())),
+                     "model_level": level_of(m25, m10),
+                     "warn_mid": level_of((m25 + h25) / 2, (m25 + h25) / 2 * ratio),
+                     "warn_hi": level_of(h25, h25 * ratio),
                      "cams_level": level_of(c25, c10)})
     sc = pd.DataFrame(rows)
     bad = sc["obs_level"] >= 3
@@ -107,17 +111,18 @@ def main() -> None:
                 "pod": round(hits / max(1, int(bad.sum())), 2), "far": round(int((warn & ~bad).sum()) / max(1, int(warn.sum())), 2)}
 
     worst = sc.sort_values("obs25", ascending=False).head(10)
-    score = {"days": int(len(sc)), "bad_days": int(bad.sum()), "model": pod_far("model_level"), "cams": pod_far("cams_level"),
-             "worst10": {"model_warned": int((worst["model_level"] >= 3).sum()),
+    score = {"days": int(len(sc)), "bad_days": int(bad.sum()), "model_alert": pod_far("warn_mid"),
+             "model_level": pod_far("model_level"), "cams": pod_far("cams_level"),
+             "worst10": {"model_warned": int((worst["warn_mid"] >= 3).sum()),
                          "cams_warned": int((worst["cams_level"] >= 3).sum())}}
     print(f"day-before warnings for sensitive groups (level >= 3), VT, {score['days']} holdout days, "
-          f"{score['bad_days']} bad: model {score['model']}, CAMS {score['cams']}")
+          f"{score['bad_days']} bad: model alert {score['model_alert']}, model level {score['model_level']}, CAMS {score['cams']}")
     print(f"10 worst PM2.5 days: model warned on {score['worst10']['model_warned']}, CAMS on {score['worst10']['cams_warned']}")
 
     if args.date:
         target = pd.Timestamp(args.date).date()
     else:
-        caught = worst[worst["model_level"] >= 3]
+        caught = worst[worst["warn_mid"] >= 3]
         target = (caught if len(caught) else worst).iloc[0]["date"]
     obs = day.loc[target]
     print(f"episode {target}: VT mean PM2.5 {obs.pm25:.1f}, PM10 {obs.pm10:.1f} µg/m³")
@@ -137,15 +142,17 @@ def main() -> None:
         if f is None:
             continue
         m25, m10 = float(f["pm25"].mean()), float(f["pm10"].mean())
+        mid = (m25 + float(f["hi"].mean())) / 2
+        alert = max(level_of(m25, m10), level_of(mid, mid * m10 / max(m25, 0.1)))
         result["forecasts"].append({
             "issued": f["issued"], "days_before": days_before, "lead_hours": f["lead"],
             "hourly": [{"t": local[k].isoformat(), "pm25": r1(a), "pm10": r1(b), "pm25_lo": r1(c), "pm25_hi": r1(e)}
                        for k, a, b, c, e in zip(f["hours"], f["pm25"], f["pm10"], f["lo"], f["hi"])],
-            "daily": {"pm10_mean": r1(m10), "pm25_mean": r1(m25), "level": level_of(m25, m10),
+            "daily": {"pm10_mean": r1(m10), "pm25_mean": r1(m25), "level": level_of(m25, m10), "alert_level": alert,
                       "exceeds_eu_limit": bool(m10 > EU_PM10_DAILY_LIMIT)},
         })
         print(f"  issued {f['issued'][:16]} ({days_before} d before): PM2.5 {m25:.1f}, PM10 {m10:.1f}, level "
-              f"{level_of(m25, m10)} | CAMS PM2.5 {c25:.1f}, level {level_of(c25, c10)} | observed level {level_of(obs.pm25, obs.pm10)}")
+              f"{level_of(m25, m10)} (alert {alert}) | CAMS PM2.5 {c25:.1f}, level {level_of(c25, c10)} | observed level {level_of(obs.pm25, obs.pm10)}")
     if args.no_write:
         return
     OUT.write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
@@ -170,7 +177,8 @@ def plot(res: dict) -> None:
                 label=f"прогноза {f['days_before']} дни преди" if f["days_before"] > 1 else "прогноза 1 ден преди")
     ax.plot(hours, [x["pm25"] for x in res["cams"]], color="#4fa3d6", lw=2, ls="--", label="CAMS (Copernicus)")
     ax.axhline(15, color="#8e2b8c", lw=1, ls=":")
-    ax.text(0.2, 15.8, "„умерено“ (EAQI 3): предупреждение за чувствителни", color="#8e2b8c", fontsize=10)
+    ax.text(23, 13.2, "праг „умерено“ (EAQI 3): предупреждение за чувствителни", color="#8e2b8c", fontsize=10, ha="right")
+    ax.set_ylim(bottom=0)
     ax.set_xlabel("час")
     ax.set_ylabel("PM2.5, µg/m³")
     ax.set_title(f"Велико Търново, {res['date']}: смог, предупреден предварително", fontsize=14, loc="left")
