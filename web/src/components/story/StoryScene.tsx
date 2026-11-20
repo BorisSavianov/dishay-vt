@@ -6,13 +6,14 @@ import type { StoryData } from '@/lib/story/facts';
 import { CameraRig } from './CameraRig';
 import { DevProbe } from './DevProbe';
 import { Sky } from './Sky';
+import { Sensors } from './Sensors';
 import { Smog } from './Smog';
 import { Terrain } from './Terrain';
 
 export type Tier = 'high' | 'low';
 
 // The single WebGL canvas behind the chapters. Loaded with next/dynamic (ssr: false).
-export default function StoryScene({ data: _data, tier }: { data: StoryData; tier: Tier }) {
+export default function StoryScene({ data, tier }: { data: StoryData; tier: Tier }) {
   return (
     <Canvas
       dpr={[1, tier === 'high' ? 1.5 : 1.25]}
@@ -24,6 +25,7 @@ export default function StoryScene({ data: _data, tier }: { data: StoryData; tie
       <Suspense fallback={null}>
         <Terrain segments={tier === 'high' ? 560 : 300} />
         <Smog count={tier === 'high' ? 32000 : 10000} dpr={tier === 'high' ? 1.5 : 1.25} />
+        <Sensors sensors={data.sensors} dpr={tier === 'high' ? 1.5 : 1.25} />
       </Suspense>
       <CameraRig />
       <DevProbe />

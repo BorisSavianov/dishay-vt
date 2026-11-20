@@ -31,6 +31,36 @@ export function useReveals(enabled: boolean): void {
           scrollTrigger: { trigger: el, start: 'top 88%', toggleActions: 'play none none reverse' },
         });
       });
+      document.querySelectorAll<HTMLElement>('[data-phone]').forEach((el) => {
+        gsap.from(el, {
+          rotateX: 18,
+          y: 60,
+          autoAlpha: 0,
+          transformPerspective: 1200,
+          duration: 1.3,
+          ease: 'expo.out',
+          scrollTrigger: { trigger: el, start: 'top 85%', toggleActions: 'play none none reverse' },
+        });
+      });
+      // The episode chart draws itself: observed, then our forecast, then CAMS.
+      document.querySelectorAll<HTMLElement>('[data-draw]').forEach((el) => {
+        const paths = el.querySelectorAll<SVGPathElement>('path.ep-observed, path.ep-forecast, path.ep-cams');
+        paths.forEach((p, i) => {
+          const len = p.getTotalLength();
+          gsap.fromTo(
+            p,
+            { strokeDasharray: len, strokeDashoffset: len },
+            {
+              strokeDashoffset: 0,
+              duration: 1.8,
+              delay: 0.25 + i * 0.25,
+              ease: 'power2.inOut',
+              clearProps: 'strokeDasharray,strokeDashoffset',
+              scrollTrigger: { trigger: el, start: 'top 80%', toggleActions: 'play none none reverse' },
+            },
+          );
+        });
+      });
       document.querySelectorAll<HTMLElement>('[data-bar]').forEach((el, i) => {
         gsap.from(el, {
           scaleX: 0,
