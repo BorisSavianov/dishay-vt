@@ -192,45 +192,51 @@ def test_run_block_matches_contract():
 
 import json
 
-from ml.aq_scoreboard import live_score, log_issued, read_log, scoreboard_block
+from ml.aq_scoreboard import HORIZON, live_block, log_arrays, new_observations, scoreboard_block
 
 TIMES = pd.date_range("2026-11-20T10:00Z", periods=7, freq="h")   # 10:00Z .. 16:00Z
-IDS = np.array([101])
-OBS = np.full((7, 1), 10.0, dtype=np.float32)
+IDS = np.array([101, 102])
+OBS = np.full((7, 2), 10.0, dtype=np.float32)
+OBS[3, 1] = np.nan
 
 
 def ts(hhmm: str) -> pd.Timestamp:
     return pd.Timestamp(f"2026-11-20T{hhmm}Z")
 
 
-def log_rows(issued: str, targets: list[str], sensor: int = 101) -> pd.DataFrame:
+def log_rows(issued: str, horizons: list[int], sensor: int = 101) -> pd.DataFrame:
+    """As ml.aq_forecast logs them: target hour t = issued_at + (h - 1) h."""
     i = ts(issued)
-    t = [ts(x) for x in targets]
-    return pd.DataFrame({"issued_at": i, "sensor_id": sensor, "t": t,
-                         "horizon_h": [int((x - i) / pd.Timedelta(hours=1)) for x in t],
-                         "pm25": 11.0, "pm10": 18.0, "cams_pm25": 14.0, "persistence_pm25": 12.0})
+    return pd.DataFrame({"issued_at": i, "sensor_id": sensor, "t": [i + pd.Timedelta(hours=h - 1) for h in horizons],
+                         "horizon_h": horizons, "pm25": [10.0 + h for h in horizons], "pm10": 18.0,
+                         "cams_pm25": float("nan"), "persistence_pm25": 12.0})
 
 
-def test_live_score_none_before_any_hour_passes():
-    assert live_score(log_rows("12:00", ["13:00"]), OBS, TIMES, IDS, upto=ts("12:00")) is None
+def test_log_arrays_one_row_per_run_and_sensor_indexed_by_horizon():
+    rows = pd.concat([log_rows("12:00", [1, 2, 72]), log_rows("12:00", [1], sensor=102),
+                      log_rows("13:00", [3])], ignore_index=True)
+    out = log_arrays(rows)
+    assert [(r[0].hour, r[1]) for r in out] == [(12, 101), (12, 102), (13, 101)]
+    issued, sid, pm25, pm10, cams, pers = out[0]
+    assert len(pm25) == HORIZON and pm25[0] == 11.0 and pm25[1] == 12.0 and pm25[71] == 82.0 and pm25[2] is None
+    assert cams == [None] * HORIZON and pers == 12.0 and issued.tzinfo is not None
 
 
-def test_live_score_counts_hours_and_horizons():
-    log = pd.concat([log_rows("12:00", ["13:00", "14:00", "15:00", "16:00"]), log_rows("13:00", ["14:00", "15:00"]),
-                     log_rows("12:00", ["13:00"], sensor=999)], ignore_index=True)
-    s = live_score(log, OBS, TIMES, IDS, upto=ts("15:00"))
-    assert s["checked_hours"] == 3 and s["horizons"] == "1–3 h"
-    assert s["mae_pm25"] == {"model": 1.0, "cams": 4.0, "persistence": 2.0}
-    assert s["since"] == "2026-11-20T14:00:00+02:00"
+def test_new_observations_after_upto_and_skips_missing():
+    o = new_observations(OBS, TIMES, IDS, after=ts("11:00"), upto=ts("13:00"))
+    assert [t.hour for t in o["t"]] == [12, 12, 13]           # 13:00 sensor 102 is missing
+    assert o["sid"] == [101, 102, 101] and o["obs"] == [10.0, 10.0, 10.0]
+    assert new_observations(OBS, TIMES, IDS, after=ts("13:00"), upto=ts("13:00"))["sid"] == []
+    assert len(new_observations(OBS, TIMES, IDS, after=None, upto=ts("10:00"))["sid"]) == 2
 
 
-def test_log_roundtrip(tmp_path):
-    rows = log_rows("12:00", ["13:00", "14:00"])
-    a = log_issued(ts("12:00"), rows, tmp_path)
-    log_issued(ts("13:00"), rows, tmp_path)
-    assert a.name == "issued-20261120-12.parquet"
-    assert len(read_log(tmp_path)) == 2 * len(rows)
-    assert read_log(tmp_path / "missing").empty
+def test_live_block_shape():
+    since = pd.Timestamp("2026-11-20T12:00Z").to_pydatetime()
+    b = live_block((since, 3, 1, 3, 20, 20.0, 80.0, 40.0))
+    assert b == {"since": "2026-11-20T14:00:00+02:00", "checked_hours": 3, "horizons": "1–3 h",
+                 "mae_pm25": {"model": 1.0, "cams": 4.0, "persistence": 2.0}}
+    assert live_block((None, 0, None, None, None, None, None, None)) is None
+    assert validate(payload_with({"updated_at": "2026-11-20T15:00:00+02:00", "live": b})) == []
 
 
 def test_scoreboard_block_absent_without_inputs(tmp_path):

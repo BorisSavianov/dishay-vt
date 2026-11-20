@@ -1,0 +1,80 @@
+# Hourly 72 h PM forecast for every BG station → Neon (ml/aq_forecast.py). Run book: docs/aq-model.md.
+# Models and sensor lists come from the models-latest release; the live readings and the forecast log live in Neon.
+name: forecast
+
+on:
+  schedule:
+    - cron: "7 * * * *"   # GitHub may start it 10–30 min late; the web app labels a stale forecast
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "--no-db: read Neon and run the writes, then roll them back"
+        type: boolean
+        default: true
+
+concurrency:
+  group: forecast
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest   # CPU only: ~1 min of XGBoost incl. SHAP
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TG_NOTIFY_URL: ${{ secrets.TG_NOTIFY_URL }}
+      TELEGRAM_NOTIFY_SECRET: ${{ secrets.TELEGRAM_NOTIFY_SECRET }}
+      GH_TOKEN: ${{ github.token }}
+      # Writes happen only on a manual run with dry_run off, or on schedule once the repo variable
+      # FORECAST_LIVE is "true" (the switch from the PC loop; docs/aq-model.md). Everything else is a dry run.
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || github.event_name != 'workflow_dispatch' && (github.event_name != 'schedule' || vars.FORECAST_LIVE != 'true') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --group ml --frozen
+
+      - name: Models and sensor lists (release models-latest)
+        run: uv run --group ml python -u -m ml.aq_release download
+
+      - name: Restore the Open-Meteo / CAMS cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/aq/forecast_cache
+          key: openmeteo-${{ github.run_id }}
+          restore-keys: openmeteo-
+
+      - name: Forecast
+        run: |
+          args=(--once --out forecast.json)
+          if [ "$DRY_RUN" = "true" ]; then args+=(--no-db); fi
+          echo "dry run: $DRY_RUN"
+          uv run --group ml python -u -m ml.aq_forecast "${args[@]}"
+
+      - name: Contract
+        run: |
+          uv run --group ml python -m ml.aq_contract forecast.json | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "dry run: $DRY_RUN" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save the Open-Meteo / CAMS cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw/aq/forecast_cache
+          key: openmeteo-${{ hashFiles('data/raw/aq/forecast_cache/*.json') }}
+
+      - name: Payload (dry runs)
+        if: env.DRY_RUN == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forecast
+          path: forecast.json
+          retention-days: 3
+          if-no-files-found: ignore
