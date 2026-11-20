@@ -24,6 +24,7 @@ from ml.aq_features import (FEATURES, GROUPS, RAW, TZ, WEATHER, build_panel, der
                             load_hourly, load_sensors)
 from ml.aq_labels import reason
 from ml.aq_levels import EU_PM10_DAILY_LIMIT, level_of
+from ml.aq_models import Model
 from ml.aq_train import predict_all
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -144,8 +145,9 @@ def forecast_frames(cells: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
 # ---------------- forecast ----------------
 
 def load_models() -> tuple[dict, dict]:
-    models = {n: lgb.Booster(model_file=str(MODELS / f"aq_{n}.txt")) for n in ("pm25", "pm10", "pm25_q10", "pm25_q90")}
     meta = json.loads((MODELS / "aq_meta.json").read_text(encoding="utf-8"))
+    algo = meta.get("algo", "lgbm")
+    models = {n: Model.load(MODELS / f"aq_{n}", algo) for n in ("pm25", "pm10", "pm25_q10", "pm25_q90")}
     models["_space"] = meta.get("space", "raw")
     return models, meta
 
@@ -167,7 +169,7 @@ def pick_stations(panel, i: int) -> np.ndarray:
 
 def explain(booster, X: pd.DataFrame, log_pred: np.ndarray, space: str = "raw") -> dict[str, np.ndarray]:
     """µg/m³ each reason group adds to each row's PM2.5 (SHAP; raw-space models are additive in µg/m³)."""
-    contrib = booster.predict(X, pred_contrib=True)[:, : len(FEATURES)]
+    contrib = booster.contrib(X)[:, : len(FEATURES)]
     pred = np.expm1(log_pred)
     out: dict[str, np.ndarray] = {}
     for g in sorted(set(GROUPS.values())):
@@ -265,8 +267,8 @@ def run_once(write_db: bool = True) -> dict:
                          "latest": lt, "hourly": hourly_items, "daily": daily})
     stations.sort(key=lambda s: (not s["featured"], s["city"], s["name"]))
     generated = now.tz_convert(TZ).replace(microsecond=0).isoformat()
-    model_block = {k: meta[k] for k in ("name", "kind", "trained_rows", "sensors", "holdout", "mae", "exceedance_f1")
-                   if k in meta}
+    model_block = {k: meta[k] for k in ("name", "kind", "trained_rows", "sensors", "holdout", "mae", "exceedance_f1",
+                                        "mae_vt", "mae_by_horizon", "importance") if k in meta}
     payload = {"generated_at": generated, "model": model_block, "stations": stations}
     errors = validate(payload)
     if errors:

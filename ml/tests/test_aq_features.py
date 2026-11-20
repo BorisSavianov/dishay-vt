@@ -78,3 +78,11 @@ def test_spike_filter_drops_broken_sensor_keeps_real_episode():
     assert bad.tolist() == [False, False, False, True]
     assert np.isnan(p25[:50, 3]).all()  # flagged hours blanked; build_panel then drops the whole sensor
     assert (p25[50:60, :3] == 150.0).all()
+
+
+def test_spike_filter_drops_sensor_stuck_low():
+    from ml.aq_features import spike_filter
+    sensors = pd.DataFrame({"lat": [43.07, 43.075, 43.08, 43.085], "lon": [25.62, 25.62, 25.63, 25.62]})
+    p25 = np.full((100, 4), 40.0, dtype=np.float32)
+    p25[:, 3] = 0.6
+    assert spike_filter(p25, p25 * 1.5, sensors).tolist() == [False, False, False, True]

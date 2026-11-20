@@ -154,3 +154,25 @@ Each run replaces all rows in one transaction (stations missing from the run are
 ### `GET /api/aq/<station id>`
 
 One `AqStation` with `hourly` (72 items). `404` for an unknown id.
+
+### Episode replay: `web/src/data/aq_episode.json`
+
+Written by `python -m ml.aq_episode` (bundled, static). A real smog day in Veliko Tarnovo from the winter 2025/26 holdout, replayed with the models trained *before* that winter, so it is an honest forecast. For the „Защо?“ page and slide 6.
+
+```jsonc
+{
+  "date": "2025-12-18", "place": "Велико Търново", "place_en": "Veliko Tarnovo", "sensors": 9, "model": "lgbm-v1",
+  "observed": [ { "t": "2025-12-18T00:00:00+02:00", "pm25": 31.2, "pm10": 70.1 } ],   // 24 hourly, VT city mean
+  "cams":     [ { "t": "...", "pm25": 19.0, "pm10": 25.3 } ],                         // CAMS at the same hours
+  "observed_daily": { "pm10_mean": 68.9, "pm25_mean": 30.0, "level": 3, "exceeds_eu_limit": true },
+  "cams_daily":     { "pm10_mean": 25.7, "pm25_mean": 19.7, "level": 3, "exceeds_eu_limit": false },
+  "forecasts": [ { "issued": "2025-12-16T12:00:00+02:00", "days_before": 2, "lead_hours": [36, 59],
+                   "hourly": [ { "t": "...", "pm25": 23.1, "pm10": 43.2, "pm25_lo": 12.0, "pm25_hi": 35.0 } ],
+                   "daily": { "pm10_mean": 43.2, "pm25_mean": 23.1, "level": 3, "exceeds_eu_limit": false } },
+                 { "days_before": 1, ... } ],
+  "score": { "days": 178, "bad_days": 23,                                             // day-before warnings, level >= 3
+             "model": { "hits": 9, "misses": 14, "false_alarms": 4, "pod": 0.39, "far": 0.31 },
+             "cams":  { "hits": 20, "misses": 3, "false_alarms": 23, "pod": 0.87, "far": 0.53 },
+             "worst10": { "model_warned": 6, "cams_warned": 10 } }
+}
+```

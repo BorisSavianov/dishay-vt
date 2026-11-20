@@ -14,3 +14,18 @@ Checked on 2026-11-15 during the recon. Endpoints and quirks come from the recon
 | NSI census 2021 | census2021.bg, nsi.bg/en and /bg census pages | NSI licence | Not pulled. Pages redirect or 404. Only a StatBook PDF link found. Needs a direct table source. |
 | Matura results (ДЗИ) | data.egov.bg keyword search | n/a | Not found under "ДЗИ", "матура" or "зрелостни". Try mon.bg. |
 | MON school list | data.egov.bg dataset 9c3313f6-f5b0-4cca-a456-906f0d0c57d1 | open data | Found. Resource format and size not verified; not downloaded. |
+
+## Air-quality forecast („Дишай ВТ“), checked 2026-11-20
+
+| Source | Endpoint or file | Licence | Notes and quirks |
+|---|---|---|---|
+| sensor.community (Luftdaten) archive | `archive.sensor.community/{YYYY}/{date}/{date}_{type}_sensor_{id}.csv.gz` (≤ 2025), `/{date}/…csv` (2026) | ODbL | The target. 602 outdoor PM sensors in BG (SDS011, PMS*, SPS30), 10 near VT. `P1` = PM10, `P2` = PM2.5, UTC times, a reading every ~2.5 min. Reduced to hourly means on download (`ml/aq_fetch.py`). The server serves ~40 files/s, so only heating seasons (Oct–Mar, 2023 →) are fetched. Today's file appears only tomorrow. |
+| sensor.community live API | `data.sensor.community/airrohr/v1/filter/country=BG`, `static/v2/data.24h.json` | ODbL | Sensor list and the live readings, polled every 5 min (`ml/aq_collect.py`). Some sensors are stuck at 999.9 or read 500+ while their neighbours read 1: `spike_filter` in `ml/aq_features.py` drops them. |
+| Open-Meteo historical weather (ERA5) | `archive-api.open-meteo.com/v1/archive` | CC BY 4.0 (Open-Meteo); contains modified Copernicus Climate Change Service information | Training features: temperature, RH, wind, precipitation, pressure, boundary-layer height. 0.25° cells, top 50 cells (541 of 602 sensors). ERA5 lags ~5 days. BLH is missing for Jan–Mar 2024 (LightGBM treats it as missing). Observed weather in training, forecast weather live: said on the slide. |
+| Open-Meteo forecast | `api.open-meteo.com/v1/forecast` (`past_days=7`, `forecast_days=5`) | CC BY 4.0 | The same variables for the live forecast. Budget: a request counts as days/14 calls per location, 10k calls a day. |
+| CAMS Europe via Open-Meteo Air Quality | `air-quality-api.open-meteo.com/v1/air-quality`, `domains=cams_europe` | Copernicus licence: "Generated using Copernicus Atmosphere Monitoring Service information 2026" | The baseline to beat and a feature. History back to 2023 is the archived short-range forecast, so the CAMS baseline is, if anything, flattered. |
+| OpenStreetMap place nodes (Overpass) | `place=city|town|village|suburb|quarter|neighbourhood` in BG | ODbL | Station names: nearest settlement, plus the neighbourhood within 1.5 km in a city. VT names follow `mobile/src/aq/mock.ts`. |
+| Open-Meteo elevation | `api.open-meteo.com/v1/elevation` | CC BY 4.0 (Copernicus DEM GLO-90) | Static feature per sensor. |
+| EEA European Air Quality Index bands | airindex.eea.europa.eu/AQI/index.html (2024 revision, WHO 2021 based) | EEA, reuse with acknowledgement | PM2.5 5/15/50/90/140, PM10 15/45/120/195/270 µg/m³. Defined on hourly values; `daily[].level` applies them to daily means. |
+
+Humidity correction: SDS011-type optical sensors over-read in humid air. Above 80% RH we divide by the κ-Köhler growth factor (Crilley et al. 2018, κ = 0.4) relative to 80% RH, with RH capped at 95%. Below 80% the reading is used as is.

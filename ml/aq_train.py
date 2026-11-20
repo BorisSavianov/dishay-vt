@@ -21,6 +21,7 @@ from sklearn.metrics import f1_score
 from ml.aq_features import (CATEGORICAL, FEATURES, base_log, derive, features, load_hourly, load_sensors, mask_short_lags,
                             targets, weather_frames, build_panel)
 from ml.aq_levels import ALERT_THRESHOLD, EU_PM10_DAILY_LIMIT, level_of
+from ml.aq_models import Model, fit_lgbm, fit_xgb, refit_xgb
 
 ROOT = Path(__file__).resolve().parents[1]
 MODELS = ROOT / "ml" / "models"
@@ -122,12 +123,29 @@ def fit(params, X, y, Xv, yv, rounds=3000, stop=100):
                      callbacks=[lgb.early_stopping(stop, verbose=False), lgb.log_evaluation(0)])
 
 
+def group_importance(booster) -> list[dict]:
+    """Gain of the PM2.5 model per reason group, as shares (the "what the model looks at" chart)."""
+    from ml.aq_features import GROUPS
+    from ml.aq_labels import GROUP_NAMES
+    gain: dict[str, float] = {}
+    for f, g in zip(FEATURES, booster.gain(FEATURES)):
+        if f == "horizon_h":
+            continue
+        grp = GROUPS.get(f, "static")
+        gain[grp] = gain.get(grp, 0.0) + float(g)
+    total = sum(gain.values()) or 1.0
+    rows = [{"group": k, "label_bg": GROUP_NAMES[k][0], "label_en": GROUP_NAMES[k][1], "share": round(v / total, 3)}
+            for k, v in gain.items()]
+    return sorted(rows, key=lambda r: -r["share"])
+
+
 def mae(a, b):
     m = ~np.isnan(a) & ~np.isnan(b)
     return float(np.mean(np.abs(a[m] - b[m]))) if m.any() else float("nan")
 
 
 def main() -> None:
+    global SPACE, MODELS
     ap = argparse.ArgumentParser()
     ap.add_argument("--issue-every", type=int, default=3)
     ap.add_argument("--horizons", type=int, default=3)
@@ -137,9 +155,13 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=0.03)
     ap.add_argument("--min-leaf", type=int, default=200)
     ap.add_argument("--space", choices=["raw", "log"], default="raw")
+    ap.add_argument("--algo", choices=["lgbm", "xgb"], default="lgbm", help="xgb trains on the GPU (CUDA)")
+    ap.add_argument("--point", choices=["l1", "l2", "huber"], default="l1", help="loss of the PM point models")
+    ap.add_argument("--models-dir", default=None, help="write here (experiments: not the live models)")
     args = ap.parse_args()
-    global SPACE
     SPACE = args.space
+    if args.models_dir:
+        MODELS = Path(args.models_dir)
     t0 = time.monotonic()
     rng = np.random.default_rng(42)
 
@@ -166,21 +188,26 @@ def main() -> None:
     if in_val.sum() < 1000:
         raise SystemExit("too few early-stopping rows yet: let the download run longer")
 
-    device = pick_device()
+    device = pick_device() if args.algo == "lgbm" else "cuda"
     params = {**BASE_PARAMS, "device_type": device, "num_leaves": args.leaves, "learning_rate": args.lr,
               "min_data_in_leaf": args.min_leaf, "lambda_l2": 5.0}
     Xt, Xv = X[~in_val], X[in_val]
     models, best = {"_space": SPACE}, {}
     r25, r10 = residual(y25, X, "pm25"), residual(y10, X, "pm10")
-    point = {"objective": "l2"} if SPACE == "log" else {"objective": "l1"}
+    point = {"objective": "l2"} if SPACE == "log" else {"objective": args.point}
     specs = {
         "pm25": (point, r25),
         "pm10": (point, r10),
         "pm25_q10": ({"objective": "quantile", "alpha": 0.1}, r25),
         "pm25_q90": ({"objective": "quantile", "alpha": 0.9}, r25),
     }
+    kinds = {"pm25": args.point if SPACE == "raw" else "l2", "pm10": args.point if SPACE == "raw" else "l2",
+             "pm25_q10": "q10", "pm25_q90": "q90"}
     for name, (extra, y) in specs.items():
-        m = fit({**params, **extra}, Xt, y[~in_val], Xv, y[in_val])
+        if args.algo == "lgbm":
+            m = fit_lgbm({**params, **extra}, Xt, y[~in_val], Xv, y[in_val], weights(Xt), weights(Xv))
+        else:
+            m = fit_xgb(kinds[name], Xt, y[~in_val], Xv, y[in_val])
         models[name], best[name] = m, m.best_iteration
         log(f"{name}: {m.best_iteration} trees ({device})")
 
@@ -247,15 +274,18 @@ def main() -> None:
         "mae_vt": {"model": round(h24_vt["model"], 1), "cams": round(h24_vt["cams"], 1),
                    "persistence": round(h24_vt["persistence"], 1)},
         "exceedance_f1": {"model": round(f1["model"], 2), "cams": round(f1["cams"], 2)},
+        "mae_by_horizon": [{"h": r["h"], "model": round(r["model"], 1), "persistence": round(r["persistence"], 1),
+                            "cams": round(r["cams"], 1)} for r in all_bg],
+        "importance": group_importance(models["pm25"]),
         "trained_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-        "device": device, "best_iteration": best, "space": SPACE, "sensor_hours": n_obs,
+        "device": device, "best_iteration": best, "space": SPACE, "algo": args.algo, "point": args.point, "sensor_hours": n_obs,
     }
     beats = h24["model"] < min(h24["persistence"], h24["cams"])
     report = {"meta": meta, "mae_by_horizon_bg": all_bg, "mae_by_horizon_vt": vt, "band_coverage_10_90": coverage,
               "exceedance_f1": f1, "vt_alert_days_holdout": alert_days, "vt_exceedance_days_holdout": vt_exceed,
               "cams_bias_ratio": ratio, "beats_baselines_24h": beats,
               "importance": sorted(({"feature": f, "gain": float(g_)} for f, g_ in
-                                    zip(FEATURES, models["pm25"].feature_importance("gain"))),
+                                    zip(FEATURES, models["pm25"].gain(FEATURES))),
                                    key=lambda r: -r["gain"])[:15]}
     REPORTS.mkdir(parents=True, exist_ok=True)
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M")
@@ -271,6 +301,10 @@ def main() -> None:
     log(f"beats both baselines at 24 h: {beats}")
 
     MODELS.mkdir(parents=True, exist_ok=True)
+    # The models that never saw the holdout: ml.aq_episode replays past episodes with these only.
+    for name, m in models.items():
+        if not name.startswith("_"):
+            m.save(MODELS / f"aq_{name}_eval")
     if args.final:
         # Refit on every row up to now with the early-stopped tree counts (+10 %).
         i2, s2, h2 = sample(panel, rng, START, end, args.issue_every, args.horizons)
@@ -281,13 +315,17 @@ def main() -> None:
         meta["trained_rows"] = int(len(X2))
         for name, (extra, _) in specs.items():
             y = residual(a10, X2, "pm10") if name == "pm10" else residual(a25, X2, "pm25")
-            models[name] = lgb.train({**params, **extra}, lgb.Dataset(X2, y, weight=weights(X2), categorical_feature=CATEGORICAL),
-                                     num_boost_round=int(best[name] * 1.1) + 1)
+            rounds = int(best[name] * 1.1) + 1
+            if args.algo == "lgbm":
+                models[name] = Model("lgbm", lgb.train({**params, **extra}, lgb.Dataset(
+                    X2, y, weight=weights(X2), categorical_feature=CATEGORICAL), num_boost_round=rounds), rounds)
+            else:
+                models[name] = refit_xgb(kinds[name], X2, y, rounds)
             log(f"refit {name} on {len(X2):,} rows")
     for name, m in models.items():
         if name.startswith("_"):
             continue
-        m.save_model(str(MODELS / f"aq_{name}.txt"))
+        m.save(MODELS / f"aq_{name}")
     (MODELS / "aq_meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     log(f"saved models and ml/reports/aq_{stamp}.json in {time.monotonic() - t0:.0f}s")
 

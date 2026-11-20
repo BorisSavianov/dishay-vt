@@ -132,8 +132,13 @@ def spike_filter(p25: np.ndarray, p10: np.ndarray, sensors: pd.DataFrame, radius
             ref = np.where(np.isnan(ref), national, ref)
             x = p25[:, j]
             flag = (x > floor) & (x > ratio * np.maximum(ref, 1.0))
+            # Stuck low: reads under 1/8 of the local picture while the neighbours see real pollution.
+            low = (ref > 20) & (x < ref / ratio)
             have = ~np.isnan(x)
+            dirty = have & (ref > 20)
             if have.sum() and flag.sum() / have.sum() > bad_share:
+                bad[j] = True
+            if dirty.sum() >= 24 and low.sum() / dirty.sum() > 0.5:
                 bad[j] = True
             p25[flag, j] = np.nan
             p10[flag, j] = np.nan
