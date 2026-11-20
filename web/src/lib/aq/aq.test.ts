@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GET as getStation } from '@/app/api/aq/[id]/route';
 import { GET as getList } from '@/app/api/aq/route';
 import { isBadFor, levelOf } from './levels';
-import { featuredStation, isForecast, loadForecast, withoutHourly } from './load';
+import { clearForecastCache, featuredStation, isForecast, loadForecast, withoutHourly } from './load';
 import { demoForecast } from './mock';
 
 const NOW = new Date(2026, 10, 20, 10, 15);
@@ -97,5 +97,15 @@ describe('/api/aq', () => {
     const missing = await getStation(new Request('http://test/api/aq/nope'), { params: Promise.resolve({ id: 'nope' }) });
     expect(missing.status).toBe(404);
     expect(missing.headers.get('cache-control')).toBe('no-store');
+  });
+});
+
+describe('forecast cache', () => {
+  it('serves the bundled or demo fallback fresh each time, never from the cache', async () => {
+    clearForecastCache();
+    const first = await loadForecast();
+    const second = await loadForecast();
+    expect(first.source).not.toBe('database');
+    expect(second.forecast).not.toBe(first.forecast);
   });
 });
