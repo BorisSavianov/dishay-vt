@@ -1,0 +1,346 @@
+"""Live 72 h forecast for every BG station: predict, explain, upsert into Neon, write the fallback JSON.
+
+    uv run --group ml python -u -m ml.aq_forecast            # every hour at :07, forever
+    uv run --group ml python -u -m ml.aq_forecast --once [--no-db]
+
+Inputs: the archive hourly parts (yesterday and before), the live collector (today), the Open-Meteo forecast
+and the CAMS Europe forecast (cached for 3 h), and the models from ml.aq_train."""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import sys
+import time
+from pathlib import Path
+
+import httpx
+import lightgbm as lgb
+import numpy as np
+import pandas as pd
+
+from ml.aq_contract import validate
+from ml.aq_features import (FEATURES, GROUPS, RAW, TZ, WEATHER, build_panel, derive, features, humidity_factor,
+                            load_hourly, load_sensors)
+from ml.aq_labels import reason
+from ml.aq_levels import EU_PM10_DAILY_LIMIT, level_of
+from ml.aq_train import predict_all
+
+ROOT = Path(__file__).resolve().parents[1]
+MODELS = ROOT / "ml" / "models"
+OUT = ROOT / "web" / "src" / "data" / "aq_forecast.json"
+LIVE = RAW / "live"
+FC_CACHE = RAW / "forecast_cache"
+HEADERS = {"User-Agent": "dishay-vt-hackathon/0.1 (open-data student project)"}
+HOURS_OUT = 72
+HOURS_DAILY = 96       # daily cards need up to +3 days; horizons past 72 use the 72 h model at its limit
+CACHE_TTL = 3 * 3600
+FEATURED_KM = 10
+# Physical drivers only: "persistence" and "neighbours" mostly encode mean reversion, which reads oddly as a reason.
+REASON_GROUPS = {"pbl_height", "wind_speed", "temp", "rh", "precip", "cams", "calendar"}
+# Same labels as mobile/src/aq/mock.ts, so web and phone agree on the VT names.
+NAME_OVERRIDES = {35767: "ВТ – Център", 66083: "ВТ – Бузлуджа", 66617: "ВТ – Бузлуджа (2)", 41885: "ВТ – Картала",
+                  63801: "ВТ – Акация", 98556: "ВТ – Колю Фичето", 37065: "ВТ – Запад", 14776: "Самоводене",
+                  76712: "Арбанаси"}
+
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+
+def log(msg: str) -> None:
+    print(f"{dt.datetime.now():%H:%M:%S} {msg}", flush=True)
+
+
+def r1(x) -> float:
+    return round(float(x), 1)
+
+
+# ---------------- inputs ----------------
+
+def collector_hourly(days: int = 3) -> pd.DataFrame:
+    frames = []
+    for path in sorted(LIVE.glob("readings-*.csv"))[-days:]:
+        frames.append(pd.read_csv(path))
+    if not frames:
+        return pd.DataFrame(columns=["sensor_id", "hour", "pm10", "pm25", "n"])
+    df = pd.concat(frames).drop_duplicates(["sensor_id", "timestamp"])
+    df["time"] = pd.to_datetime(df["timestamp"], utc=True)
+    df["hour"] = df["time"].dt.floor("h")
+    for c in ("pm10", "pm25"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    g = df.groupby(["sensor_id", "hour"]).agg(pm10=("pm10", "mean"), pm25=("pm25", "mean"), n=("pm25", "count"))
+    out = g.reset_index()
+    # The collector sees ~12 snapshots an hour: scale n so build_panel's readings-per-hour rule means "half an hour".
+    out["n"] = out["n"] * 2
+    return out
+
+
+def latest_readings(days: int = 1) -> pd.DataFrame:
+    frames = [pd.read_csv(p) for p in sorted(LIVE.glob("readings-*.csv"))[-days - 1:]]
+    if not frames:
+        return pd.DataFrame()
+    df = pd.concat(frames)
+    df["time"] = pd.to_datetime(df["timestamp"], utc=True)
+    df = df.dropna(subset=["pm25", "pm10"]).sort_values("time")
+    return df.groupby("sensor_id").tail(1).set_index("sensor_id")
+
+
+def _cached(name: str):
+    path = FC_CACHE / name
+    if path.exists() and time.time() - path.stat().st_mtime < CACHE_TTL:
+        return json.loads(path.read_text(encoding="utf-8"))
+    return None
+
+
+def _batched(client, url, cells, params, name) -> list[dict]:
+    hit = _cached(name)
+    if hit is not None:
+        return hit
+    out = []
+    for k in range(0, len(cells), 50):
+        part = cells[k : k + 50]
+        lat = ",".join(c.split("_")[0] for c in part)
+        lon = ",".join(c.split("_")[1] for c in part)
+        for attempt in range(6):
+            r = client.get(url, params={**params, "latitude": lat, "longitude": lon}, timeout=120)
+            if r.status_code == 429:
+                log("open-meteo 429, waiting 65 s")
+                time.sleep(65)
+                continue
+            r.raise_for_status()
+            data = r.json()
+            data = data if isinstance(data, list) else [data]
+            for c, d in zip(part, data):
+                d["cell"] = c
+            out.extend(data)
+            break
+        else:
+            raise RuntimeError(f"open-meteo kept refusing {url}")
+    FC_CACHE.mkdir(parents=True, exist_ok=True)
+    (FC_CACHE / name).write_text(json.dumps(out), encoding="utf-8")
+    return out
+
+
+def forecast_frames(cells: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    with httpx.Client(headers=HEADERS) as client:
+        wx = _batched(client, "https://api.open-meteo.com/v1/forecast", cells,
+                      {"hourly": ",".join(WEATHER), "past_days": 7, "forecast_days": 5, "timezone": "UTC"},
+                      "weather.json")
+        aq = _batched(client, "https://air-quality-api.open-meteo.com/v1/air-quality", cells,
+                      {"hourly": "pm2_5,pm10", "past_days": 7, "forecast_days": 5, "timezone": "UTC",
+                       "domains": "cams_europe"}, "cams.json")
+
+    def frame(items):
+        rows = []
+        for d in items:
+            df = pd.DataFrame(d["hourly"])
+            df["time"] = pd.to_datetime(df["time"], utc=True)
+            df["cell"] = d["cell"]
+            rows.append(df)
+        return pd.concat(rows, ignore_index=True)
+
+    return frame(wx), frame(aq)
+
+
+# ---------------- forecast ----------------
+
+def load_models() -> tuple[dict, dict]:
+    models = {n: lgb.Booster(model_file=str(MODELS / f"aq_{n}.txt")) for n in ("pm25", "pm10", "pm25_q10", "pm25_q90")}
+    meta = json.loads((MODELS / "aq_meta.json").read_text(encoding="utf-8"))
+    models["_space"] = meta.get("space", "raw")
+    return models, meta
+
+
+def pick_stations(panel, i: int) -> np.ndarray:
+    """Columns with a reading in the last 6 h, one per OSM location (co-located sensors collapse)."""
+    recent = ~np.isnan(panel.pm25[max(0, i - 5) : i + 1]).all(axis=0)
+    cols = np.flatnonzero(recent)
+    seen, keep = set(), []
+    loc = panel.sensors["location"].to_numpy()
+    for c in cols[np.argsort(-(~np.isnan(panel.pm25[: i + 1, cols])).sum(axis=0))]:
+        key = loc[c] if loc[c] == loc[c] else ("id", panel.sensors["id"].iat[c])
+        if key in seen:
+            continue
+        seen.add(key)
+        keep.append(c)
+    return np.array(sorted(keep), dtype=int)
+
+
+def explain(booster, X: pd.DataFrame, log_pred: np.ndarray, space: str = "raw") -> dict[str, np.ndarray]:
+    """µg/m³ each reason group adds to each row's PM2.5 (SHAP; raw-space models are additive in µg/m³)."""
+    contrib = booster.predict(X, pred_contrib=True)[:, : len(FEATURES)]
+    pred = np.expm1(log_pred)
+    out: dict[str, np.ndarray] = {}
+    for g in sorted(set(GROUPS.values())):
+        idx = [k for k, f in enumerate(FEATURES) if GROUPS.get(f) == g]
+        if idx:
+            c = contrib[:, idx].sum(axis=1)
+            out[g] = c if space == "raw" else pred - np.expm1(log_pred - c)
+    return out
+
+
+def run_once(write_db: bool = True) -> dict:
+    t0 = time.monotonic()
+    models, meta = load_models()
+    sensors = load_sensors()
+    now = pd.Timestamp.now(tz="UTC")
+    i_time = now.floor("h") - pd.Timedelta(hours=1)   # last complete hour
+    start = i_time - pd.Timedelta(days=7)
+    end = i_time + pd.Timedelta(hours=HOURS_DAILY + 1)
+
+    archive = load_hourly()
+    archive = archive[archive["hour"] >= start]
+    live = collector_hourly()
+    live = live[live["hour"] >= start]
+    hourly = pd.concat([live, archive], ignore_index=True).drop_duplicates(["sensor_id", "hour"], keep="last")
+    cells = sorted(set(sensors["cell"].dropna()))
+    wx, cams = forecast_frames(cells)
+    panel = build_panel(hourly, sensors, wx, cams, start, end, min_uptime=0.3)
+    d = derive(panel)
+    i = panel.index_of(i_time)
+    cols = pick_stations(panel, i)
+    log(f"{len(cols)} stations with recent data (of {panel.pm25.shape[1]} sensors)")
+
+    H = np.arange(1, HOURS_DAILY + 1)
+    ii = np.repeat(np.full(len(cols), i), len(H))
+    ss = np.repeat(cols, len(H))
+    hh = np.tile(H, len(cols))
+    X = features(panel, d, ii, ss, np.minimum(hh, HOURS_OUT))
+    # Weather, CAMS and the calendar must still be read at the real target hour past 72 h.
+    if HOURS_DAILY > HOURS_OUT:
+        X_true = features(panel, d, ii, ss, hh)
+        past = hh > HOURS_OUT
+        keep_cols = [f for f in FEATURES if not f.startswith(("pm25_", "pm10_", "nb_")) and f not in ("horizon_h", "obs_vs_cams")]
+        X.loc[past, keep_cols] = X_true.loc[past, keep_cols]
+    P = predict_all(models, X)
+    p25, p10, lo, hi = P["pm25"], P["pm10"], P["lo"], P["hi"]
+    why = explain(models["pm25"], X, P["log25"], models["_space"])
+
+    names = json.loads((RAW / "names.json").read_text(encoding="utf-8")) if (RAW / "names.json").exists() else {}
+    latest = latest_readings()
+    times_local = panel.times.tz_convert(TZ)
+    today = now.tz_convert(TZ).date()
+    stations = []
+    for k, c in enumerate(cols):
+        sl = slice(k * len(H), (k + 1) * len(H))
+        sid = int(panel.sensors["id"].iat[c])
+        T = i + H
+        hourly_items = []
+        for j in range(HOURS_OUT):
+            cams_v = panel.cams25[T[j], panel.sensor_cell[c]] if panel.sensor_cell[c] >= 0 else np.nan
+            item = {"t": times_local[T[j]].isoformat(), "pm25": r1(p25[sl][j]), "pm10": r1(p10[sl][j]),
+                    "pm25_lo": r1(lo[sl][j]), "pm25_hi": r1(hi[sl][j])}
+            if cams_v == cams_v:
+                item["cams_pm25"] = r1(cams_v)
+            hourly_items.append(item)
+        daily = []
+        dates = np.array([t.date() for t in times_local[T]])
+        for off in (1, 2, 3):
+            day = today + dt.timedelta(days=off)
+            m = dates == day
+            if m.sum() < 12:
+                continue
+            m25, m10 = r1(p25[sl][m].mean()), r1(p10[sl][m].mean())
+            impacts = {g: float(v[sl][m].mean()) for g, v in why.items() if g in REASON_GROUPS}
+            top = sorted(impacts.items(), key=lambda kv: -abs(kv[1]))[:3]
+            daily.append({"date": day.isoformat(), "pm10_mean": m10, "pm25_mean": m25, "level": level_of(m25, m10),
+                          "exceeds_eu_limit": m10 > EU_PM10_DAILY_LIMIT,
+                          "reasons": [reason(g, v) for g, v in top if abs(v) >= 0.05]})
+        lt = None
+        if sid in latest.index:
+            row = latest.loc[sid]
+            cell = panel.sensor_cell[c]
+            hr = panel.times.searchsorted(row["time"].floor("h"))
+            rh = panel.weather["relative_humidity_2m"][min(hr, len(panel.times) - 1), cell] if cell >= 0 else np.nan
+            f = float(humidity_factor(np.array([rh]))[0]) if panel.sensors["type_code"].iat[c] != 2 else 1.0
+            lt = {"t": row["time"].tz_convert(TZ).isoformat(timespec="seconds"),
+                  "pm25": r1(row["pm25"] / f), "pm10": r1(row["pm10"] / f)}
+        nm = names.get(str(sid), {})
+        slat, slon = float(panel.sensors["lat"].iat[c]), float(panel.sensors["lon"].iat[c])
+        near_vt = float(np.hypot((slat - 43.0786) * 111.2, (slon - 25.6211) * 81.3)) <= FEATURED_KM
+        stations.append({"id": f"sc-{sid}", "name": NAME_OVERRIDES.get(sid, nm.get("name", f"Сензор {sid}")),
+                         "city": "Велико Търново" if near_vt and sid not in (14776, 76712) else nm.get("city", "България"),
+                         "featured": near_vt,
+                         "lat": round(float(panel.sensors["lat"].iat[c]), 5),
+                         "lon": round(float(panel.sensors["lon"].iat[c]), 5),
+                         "latest": lt, "hourly": hourly_items, "daily": daily})
+    stations.sort(key=lambda s: (not s["featured"], s["city"], s["name"]))
+    generated = now.tz_convert(TZ).replace(microsecond=0).isoformat()
+    model_block = {k: meta[k] for k in ("name", "kind", "trained_rows", "sensors", "holdout", "mae", "exceedance_f1")
+                   if k in meta}
+    payload = {"generated_at": generated, "model": model_block, "stations": stations}
+    errors = validate(payload)
+    if errors:
+        raise RuntimeError(f"payload fails the contract: {errors[:5]}")
+    # The bundled fallback keeps hourly for the featured stations only (all of it is in Neon), so the
+    # web bundle and the mobile copy stay small. /api/aq leaves hourly out anyway.
+    slim = {**payload, "stations": [s if s["featured"] else {k: v for k, v in s.items() if k != "hourly"}
+                                    for s in stations]}
+    OUT.write_text(json.dumps(slim, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    if write_db:
+        upsert(payload)
+    vt = next((s for s in stations if s["id"] == "sc-35767"), stations[0])
+    log(f"forecast {generated}: {len(stations)} stations, {OUT.stat().st_size / 1e6:.1f} MB, "
+        f"VT {vt['name']} days {[(x['date'], x['pm10_mean'], x['level']) for x in vt['daily']]} "
+        f"in {time.monotonic() - t0:.0f}s")
+    return payload
+
+
+# ---------------- Neon ----------------
+
+def database_url() -> str | None:
+    env = ROOT / "web" / ".env.local"
+    if env.exists():
+        for line in env.read_text(encoding="utf-8").splitlines():
+            if line.startswith("DATABASE_URL="):
+                return line.split("=", 1)[1].strip()
+    return None
+
+
+DDL = """create table if not exists aq_forecast (
+  id text primary key,
+  generated_at timestamptz not null,
+  payload jsonb not null
+)"""
+
+
+def upsert(payload: dict) -> None:
+    import psycopg
+    from psycopg.types.json import Jsonb
+
+    url = database_url()
+    if not url:
+        log("no DATABASE_URL in web/.env.local: skipped Neon")
+        return
+    gen = payload["generated_at"]
+    rows = [("_model", gen, Jsonb({"generated_at": gen, "model": payload["model"]}))]
+    rows += [(s["id"], gen, Jsonb(s)) for s in payload["stations"]]
+    with psycopg.connect(url, connect_timeout=20) as conn:
+        with conn.cursor() as cur:
+            cur.execute(DDL)
+            cur.execute("delete from aq_forecast")
+            cur.executemany("insert into aq_forecast (id, generated_at, payload) values (%s, %s, %s)", rows)
+        conn.commit()
+    log(f"Neon: replaced aq_forecast with {len(rows)} rows")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--once", action="store_true")
+    ap.add_argument("--no-db", action="store_true")
+    args = ap.parse_args()
+    while True:
+        try:
+            run_once(write_db=not args.no_db)
+        except Exception as e:
+            log(f"forecast run failed: {e!r}")
+            if args.once:
+                raise
+        if args.once:
+            return
+        now = dt.datetime.now()
+        nxt = (now + dt.timedelta(hours=1)).replace(minute=7, second=0, microsecond=0)
+        time.sleep(max(60, (nxt - now).total_seconds()))
+
+
+if __name__ == "__main__":
+    main()
