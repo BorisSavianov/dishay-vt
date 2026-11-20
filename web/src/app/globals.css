@@ -2143,3 +2143,45 @@ button.legend-row[aria-pressed='false'] {
   font-size: 0.95rem;
   line-height: 1.5;
 }
+
+/* ---------- Chart notes and the compact AI card ---------- */
+.fc-legend .fc-note {
+  color: var(--muted);
+}
+
+.explain-card .summary-output {
+  min-height: 0;
+}
+
+.explain-card .btn {
+  align-self: flex-start;
+}
+
+/* A thumb needs a taller slider than the browser's default */
+.time-slider input[type='range'] {
+  min-height: 44px;
+}
+
+.fc-legend li.fc-note {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.method-link a {
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  /* Two tiles to a row leave no room for a long word beside the icon. */
+  .kpi-top {
+    font-size: 0.8rem;
+    gap: 6px;
+    align-items: flex-start;
+  }
+  .kpi-top .icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+  }
+}

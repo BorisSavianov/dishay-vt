@@ -188,6 +188,7 @@ const bg = {
   'm.limits.4': 'Ако обновяването спре, сайтът показва последната прогноза и нейния час.',
   'm.limits.5': 'Съветите са общи и не заместват лекар.',
   's.lead': 'Всичко, на което стои прогнозата: какво взимаме, за какво и при какъв лиценз.',
+  's.method': 'Как работи прогнозата: Методология →',
   's.col.source': 'Източник',
   's.col.use': 'За какво',
   's.col.license': 'Лиценз',
@@ -222,6 +223,17 @@ const bg = {
   'why.warn.value': '{hits} от {bad}',
   'why.warn.sub': 'лоши дни миналата зима. CAMS: {cams} от {bad}, но с {cf} фалшиви тревоги (ние: {mf}).',
   'm.f1': 'За дните с PM10 над нормата на ЕС мярката F1 е {model} при нашия модел и {cams} при CAMS (1 е идеално, 0 е никакво).',
+  'fresh.label': 'Последна актуализация: {when}',
+  'fresh.today': 'днес, {time}',
+  'fresh.yesterday': 'вчера, {time}',
+  'fresh.other': '{date}, {time}',
+  'fresh.stale': 'Прогнозата е от {time} – обновява се всеки час.',
+  'web.chart.camsnote': 'CAMS прогнозира ~2,5 дни напред',
+  'm.live.title': 'Проверка на живо',
+  'm.live.body': 'Освен зимната проверка, повтаряме теста за ноември 2026 г.: за всеки ден от 1 до 19 ноември взимаме прогнозата, издадена в 12:00 с времето така, както е било прогнозирано тогава, и я сравняваме с измереното на следващия ден. Моделите са обучени преди зима 2025/26. Уговорка: CAMS (и като входен признак, и като сравнение) е архивът на Open-Meteo, който пази най-новото пускане за всеки час, затова сравнението с CAMS е честно, а това с „утре = днес“ е малко ласкателно. На живо добавяме и прогнозите, издадени оттогава насам, оценени щом пристигнат измерванията.',
+  'm.cams.title': 'Докъде стига CAMS',
+  'm.cams.body': 'CAMS прогнозира около 2,5 дни напред, а ние – 72 часа. След последния му час моделът повтаря последния ден на CAMS като вход, така че прогнозата не скача, а пунктираната линия на графиката спира там, където CAMS свършва.',
+  'm.limits.6': 'Оценката за източниците (отопление, трафик, пренос) не е химичен анализ: тя се смята от сензорите и времето и има две изкривявания, описани по-горе.',
 } as const;
 
 export type AirKey = keyof typeof bg;
@@ -411,6 +423,7 @@ const en: Record<AirKey, string> = {
   'm.limits.4': 'If the hourly refresh stops, the site shows the last forecast and when it was made.',
   'm.limits.5': 'The advice is general and does not replace a doctor.',
   's.lead': 'Everything the forecast rests on: what we take, what for, and under which licence.',
+  's.method': 'How the forecast works: Methodology →',
   's.col.source': 'Source',
   's.col.use': 'What for',
   's.col.license': 'Licence',
@@ -445,6 +458,17 @@ const en: Record<AirKey, string> = {
   'why.warn.value': '{hits} of {bad}',
   'why.warn.sub': 'bad days last winter. CAMS: {cams} of {bad}, but with {cf} false alarms (us: {mf}).',
   'm.f1': 'For the days with PM10 above the EU limit the F1 score is {model} for our model and {cams} for CAMS (1 is perfect, 0 is none).',
+  'fresh.label': 'Last updated: {when}',
+  'fresh.today': 'today, {time}',
+  'fresh.yesterday': 'yesterday, {time}',
+  'fresh.other': '{date}, {time}',
+  'fresh.stale': 'The forecast is from {time} and refreshes every hour.',
+  'web.chart.camsnote': 'CAMS forecasts ~2.5 days ahead',
+  'm.live.title': 'Live check',
+  'm.live.body': 'Besides the winter test we repeat it for November 2026: for each day from 1 to 19 November we take the forecast issued at 12:00 with the weather as it was forecast at the time, and compare it with what was measured the next day. The models were trained before winter 2025/26. A caveat: CAMS (both as a model input and as the comparison) is the Open-Meteo archive, which keeps the newest run for each hour, so the comparison with CAMS is fair while the one with "tomorrow = today" is slightly flattered. Live, we also add the forecasts issued since, scored as the measurements arrive.',
+  'm.cams.title': 'How far CAMS reaches',
+  'm.cams.body': 'CAMS forecasts about 2.5 days ahead and we forecast 72 hours. Past its last hour the model repeats the last day of CAMS as an input, so the forecast does not jump, and the dashed line on the chart stops where CAMS ends.',
+  'm.limits.6': 'The estimate of the sources (heating, traffic, carried in) is not a chemical analysis: it is computed from the sensors and the weather and has the two biases described above.',
 };
 
 const table: Record<Lang, Record<AirKey, string>> = { bg, en };

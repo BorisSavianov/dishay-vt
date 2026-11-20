@@ -20,6 +20,7 @@ export type ForecastLabels = {
   table: string;
   hour: string;
   now: string;
+  camsNote: string; // why the dashed line stops early
   readout: string; // still has {time} and {value}
 };
 
@@ -31,6 +32,8 @@ const M = { top: 14, right: 14, bottom: 30, left: 44 };
 export function ForecastChart({ hourly, lang, labels }: { hourly: AqHour[]; lang: Lang; labels: ForecastLabels }) {
   const [pm, setPm] = useState<Pm>('pm25');
   const [active, setActive] = useState(0);
+  // The tooltip is shown while a pointer or the keyboard is on the chart; at rest it would cover the first hours.
+  const [touched, setTouched] = useState(false);
   const [width, setWidth] = useState(640);
   const box = useRef<HTMLDivElement>(null);
   const clip = useId();
@@ -86,6 +89,7 @@ export function ForecastChart({ hourly, lang, labels }: { hourly: AqHour[]; lang
     });
     if (run.length) camsRuns.push(run);
   }
+  const camsShort = hasCams && hourly[hourly.length - 1]!.cams_pm25 == null;
   const cams = camsRuns.filter((r) => r.length > 1).map(linePath).join(' ') || null;
 
   // Midnights and the hours to label (every 6 h, or 12 h on a phone).
@@ -94,6 +98,13 @@ export function ForecastChart({ hourly, lang, labels }: { hourly: AqHour[]; lang
   const current = hourly[active] ?? hourly[0]!;
   const fmt = (n: number) => fmtPm(lang, n);
   const pmName = pm === 'pm25' ? 'PM2.5' : 'PM10';
+  // Beside the dot, never on the line: to its right, or to its left past the middle of the chart.
+  const flip = x(active) > M.left + innerW * 0.6;
+  const tooltipStyle = {
+    left: flip ? x(active) - 16 : x(active) + 16,
+    top: Math.min(Math.max(y(value(current)), 46), HEIGHT - M.bottom - 40),
+    transform: flip ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
+  };
   const readout = labels.readout.replace('{time}', hourLabel(lang, current.t)).replace('{value}', fmt(value(current)));
 
   function onPointerMove(e: PointerEvent<HTMLDivElement>) {
@@ -143,6 +154,7 @@ export function ForecastChart({ hourly, lang, labels }: { hourly: AqHour[]; lang
             {labels.cams}
           </li>
         )}
+        {camsShort && <li className="fc-note">{labels.camsNote}</li>}
       </ul>
 
       <div
@@ -151,7 +163,13 @@ export function ForecastChart({ hourly, lang, labels }: { hourly: AqHour[]; lang
         tabIndex={0}
         role="group"
         aria-label={labels.alt.replace('{pm}', pmName)}
-        onPointerMove={onPointerMove}
+        onPointerMove={(e) => {
+          setTouched(true);
+          onPointerMove(e);
+        }}
+        onPointerLeave={() => setTouched(false)}
+        onFocus={() => setTouched(true)}
+        onBlur={() => setTouched(false)}
         onKeyDown={onKeyDown}
       >
         <svg width={width} height={HEIGHT} viewBox={`0 0 ${width} ${HEIGHT}`} aria-hidden="true">
@@ -202,7 +220,8 @@ export function ForecastChart({ hourly, lang, labels }: { hourly: AqHour[]; lang
           <circle className="dot is-active" cx={x(active)} cy={y(value(current))} r={5.5} />
         </svg>
 
-        <div className="tooltip" style={{ left: Math.min(Math.max(x(active), 70), width - 70), top: y(value(current)) }}>
+        {touched && (
+        <div className="tooltip" style={tooltipStyle}>
           <strong>
             {fmt(value(current))} <small>µg/m³</small>
           </strong>
@@ -213,6 +232,7 @@ export function ForecastChart({ hourly, lang, labels }: { hourly: AqHour[]; lang
             </span>
           )}
         </div>
+        )}
         <p className="sr-only" aria-live="polite">
           {readout}
         </p>
