@@ -19,16 +19,10 @@ create table if not exists rate_limits (
   primary key (key, window_start)
 );
 
--- Air-quality forecast. ml/aq_forecast.py upserts one row per station every hour; the web reads them.
+-- Air-quality forecast (contract/CONTRACT.md "Neon table"). ml/aq_forecast.py replaces all rows every hour in one
+-- transaction: the row '_model' holds { generated_at, model }, every other row is one station.
 create table if not exists aq_forecast (
-  station_id text primary key,
-  generated_at timestamptz not null,
-  payload jsonb not null
-);
-
--- The model that made the forecast: name, rows, holdout scores. Always one row.
-create table if not exists aq_model (
-  id integer primary key default 1 check (id = 1),
+  id text primary key,
   generated_at timestamptz not null,
   payload jsonb not null
 );

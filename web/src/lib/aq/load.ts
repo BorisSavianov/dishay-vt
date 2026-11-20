@@ -11,8 +11,7 @@ export type AqLoad = { source: AqSource; forecast: AqForecast };
 // Teodor's fallback file, written by ml/aq_forecast.py and committed at the freeze.
 export const BUNDLED_PATH = join(process.cwd(), 'src', 'data', 'aq_forecast.json');
 
-// Rows older than this, measured from the newest row, belong to an earlier run and are dropped.
-const STALE_MS = 6 * 3600_000;
+export const MODEL_ROW = '_model';
 
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
@@ -46,20 +45,13 @@ export function isForecast(v: unknown): v is AqForecast {
 
 type Sql = NonNullable<ReturnType<typeof getSql>>;
 
+// One table: the '_model' row plus one row per station, all from the same run (the writer replaces them together).
 async function fromDatabase(sql: Sql): Promise<AqForecast | null> {
-  const [stationRows, modelRows] = (await Promise.all([
-    sql`select payload, generated_at from aq_forecast order by station_id`,
-    sql`select payload, generated_at from aq_model where id = 1`,
-  ])) as [{ payload: unknown; generated_at: string | Date }[], { payload: unknown; generated_at: string | Date }[]];
-  const model = modelRows[0]?.payload;
-  if (!isModel(model) || stationRows.length === 0) return null;
-  const time = (t: string | Date) => new Date(t).getTime();
-  const newest = Math.max(...stationRows.map((r) => time(r.generated_at)));
-  const stations = stationRows
-    .filter((r) => newest - time(r.generated_at) <= STALE_MS)
-    .map((r) => r.payload)
-    .filter(isStation);
-  const forecast = { generated_at: new Date(newest).toISOString(), model, stations };
+  const rows = (await sql`select id, payload from aq_forecast order by id`) as { id: string; payload: unknown }[];
+  const head = rows.find((r) => r.id === MODEL_ROW)?.payload as { generated_at?: unknown; model?: unknown } | undefined;
+  if (!head || typeof head.generated_at !== 'string') return null;
+  const stations = rows.filter((r) => r.id !== MODEL_ROW).map((r) => r.payload);
+  const forecast = { generated_at: head.generated_at, model: head.model, stations };
   return isForecast(forecast) ? forecast : null;
 }
 
@@ -77,16 +69,21 @@ export async function loadForecast(
   opts: { sql?: Sql | null; bundled?: () => AqForecast | null; now?: Date } = {},
 ): Promise<AqLoad> {
   const sql = opts.sql === undefined ? getSql() : opts.sql;
+  // A forecast whose model is a mock is labelled demo wherever it came from.
+  const label = (source: AqSource, forecast: AqForecast): AqLoad => ({
+    source: forecast.model.kind === 'mock' ? 'demo' : source,
+    forecast,
+  });
   if (sql) {
     try {
       const forecast = await fromDatabase(sql);
-      if (forecast) return { source: 'database', forecast };
+      if (forecast) return label('database', forecast);
     } catch {
       // Fall through to the bundled file.
     }
   }
   const bundled = (opts.bundled ?? readBundled)();
-  if (bundled) return { source: 'bundled', forecast: bundled };
+  if (bundled) return label('bundled', bundled);
   return { source: 'demo', forecast: demoForecast(opts.now ?? new Date()) };
 }
 

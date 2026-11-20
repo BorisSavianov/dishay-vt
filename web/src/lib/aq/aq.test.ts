@@ -7,11 +7,18 @@ import { demoForecast } from './mock';
 
 const NOW = new Date(2026, 10, 20, 10, 15);
 
-// A fake Neon tagged template that answers the two loader queries from fixed rows.
-function fakeSql(stations: { payload: unknown; generated_at: string }[], model: unknown) {
-  const fn = (strings: TemplateStringsArray) =>
-    Promise.resolve(strings.join('').includes('aq_model') ? (model ? [{ payload: model, generated_at: NOW }] : []) : stations);
-  return fn as unknown as NonNullable<Parameters<typeof loadForecast>[0]>['sql'];
+type SqlOpt = NonNullable<Parameters<typeof loadForecast>[0]>['sql'];
+
+// A fake Neon tagged template that answers the loader's one query with fixed rows.
+function fakeSql(rows: { id: string; payload: unknown }[]): SqlOpt {
+  return (() => Promise.resolve(rows)) as unknown as SqlOpt;
+}
+
+function rowsOf(f: ReturnType<typeof demoForecast>, withModel = true) {
+  return [
+    ...(withModel ? [{ id: '_model', payload: { generated_at: f.generated_at, model: { ...f.model, name: 'lgbm-v1', kind: 'trained' } } }] : []),
+    ...f.stations.map((s) => ({ id: s.id, payload: s })),
+  ];
 }
 
 describe('levels (same numbers as mobile)', () => {
@@ -32,27 +39,25 @@ describe('levels (same numbers as mobile)', () => {
 
 describe('loadForecast', () => {
   const demo = demoForecast(NOW);
-  const t = demo.generated_at;
 
-  it('reads Neon when it has a model and stations', async () => {
-    const rows = demo.stations.map((s) => ({ payload: s, generated_at: t }));
-    const res = await loadForecast({ sql: fakeSql(rows, demo.model), bundled: () => null, now: NOW });
+  it('reads Neon: the _model row plus one row per station', async () => {
+    const res = await loadForecast({ sql: fakeSql(rowsOf(demo)), bundled: () => null, now: NOW });
     expect(res.source).toBe('database');
+    expect(res.forecast.model.name).toBe('lgbm-v1');
     expect(res.forecast.stations).toHaveLength(demo.stations.length);
   });
 
-  it('drops station rows left over from a run more than 6 hours older', async () => {
-    const old = new Date(new Date(t).getTime() - 7 * 3600_000).toISOString();
-    const rows = demo.stations.map((s, i) => ({ payload: s, generated_at: i === 0 ? old : t }));
-    const res = await loadForecast({ sql: fakeSql(rows, demo.model), bundled: () => null, now: NOW });
-    expect(res.forecast.stations).toHaveLength(demo.stations.length - 1);
+  it('labels a mock model as demo wherever it came from', async () => {
+    const mock = { ...demo, model: { ...demo.model, kind: 'mock' } };
+    const res = await loadForecast({ sql: null, bundled: () => mock, now: NOW });
+    expect(res.source).toBe('demo');
   });
 
-  it('falls back to the bundled file when Neon has no model, then to the demo', async () => {
-    const rows = demo.stations.map((s) => ({ payload: s, generated_at: t }));
-    const bundled = await loadForecast({ sql: fakeSql(rows, null), bundled: () => demo, now: NOW });
+  it('falls back to the bundled file when Neon has no _model row, then to the demo', async () => {
+    const trained = { ...demo, model: { ...demo.model, kind: 'trained' } };
+    const bundled = await loadForecast({ sql: fakeSql(rowsOf(demo, false)), bundled: () => trained, now: NOW });
     expect(bundled.source).toBe('bundled');
-    const failing = (() => Promise.reject(new Error('down'))) as unknown as NonNullable<Parameters<typeof loadForecast>[0]>['sql'];
+    const failing = (() => Promise.reject(new Error('down'))) as unknown as SqlOpt;
     const fallback = await loadForecast({ sql: failing, bundled: () => null, now: NOW });
     expect(fallback.source).toBe('demo');
     expect(isForecast(fallback.forecast)).toBe(true);
