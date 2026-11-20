@@ -78,6 +78,35 @@ def build_profiles(series: pd.DataFrame, temp: pd.Series, holidays: set) -> dict
     return {"baseline": base, "traffic": traffic, "samples": samples}
 
 
+PARTS = ("heating", "traffic", "other", "regional")
+
+
+def split(vt: np.ndarray, reg: np.ndarray, local: pd.DatetimeIndex, prof: dict, holidays: set) -> dict[str, np.ndarray]:
+    """Split PM2.5 hours into regional, traffic, other (always-on local) and heating. Never negative; the four
+    parts add up to `vt` at every hour. A NaN regional value counts as 0."""
+    vt = np.maximum(np.asarray(vt, dtype=float), 0.0)
+    regional = np.minimum(np.nan_to_num(np.asarray(reg, dtype=float), nan=0.0), vt)
+    inc = vt - regional
+    weekend = daytype(local, holidays)
+    hour = np.asarray(local.hour)
+    baseline = np.where(weekend, np.asarray(prof["baseline"]["weekend"])[hour], np.asarray(prof["baseline"]["weekday"])[hour])
+    base = np.minimum(inc, baseline)
+    traffic = np.where(weekend, 0.0, np.minimum(base, np.asarray(prof["traffic"])[hour]))
+    return {"heating": inc - base, "traffic": traffic, "other": base - traffic, "regional": regional}
+
+
+def day_shares(parts: dict[str, np.ndarray]) -> dict[str, float]:
+    """Each part's share of the day's total, rounded to 2 decimals; the rounding leftover goes to the largest part
+    so the shares sum to exactly 1.00."""
+    sums = {k: float(np.nansum(parts[k])) for k in PARTS}
+    total = sum(sums.values())
+    if total <= 0:
+        return {"heating": 0.0, "traffic": 0.0, "other": 0.0, "regional": 1.0}
+    cents = {k: round(100 * v / total) for k, v in sums.items()}
+    cents[max(sums, key=sums.get)] += 100 - sum(cents.values())
+    return {k: cents[k] / 100 for k in PARTS}
+
+
 def _history():
     """The cleaned panel from the first winter to the end of the holdout, its VT/regional series and VT temperature."""
     from ml.aq_features import build_panel, load_hourly, load_sensors, weather_frames

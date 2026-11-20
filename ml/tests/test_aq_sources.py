@@ -61,3 +61,60 @@ def test_profiles_fallback_under_30_samples():
     prof = build_profiles(*week_series(3), set())
     assert prof["baseline"]["weekend"][8] == prof["baseline"]["weekday"][8] == 6.0
     assert prof["traffic"][8] == 0.0
+
+
+# ---------------- Task 2: split and day shares ----------------
+
+from ml.aq_sources import day_shares, split
+
+PROF = {"baseline": {"weekday": [3.0] * 24, "weekend": [2.0] * 24}, "traffic": [1.0] * 24}
+
+
+def day(date: str) -> pd.DatetimeIndex:
+    return pd.date_range(pd.Timestamp(date, tz=TZ), periods=24, freq="h")
+
+
+def flat(v: float, n: int = 24) -> np.ndarray:
+    return np.full(n, v, dtype=float)
+
+
+def test_split_weekday_adds_up():
+    parts = split(flat(20), flat(4), day("2026-11-20"), PROF, set())
+    assert {k: set(v.tolist()) for k, v in parts.items()} == {"regional": {4.0}, "traffic": {1.0}, "other": {2.0}, "heating": {13.0}}
+    assert np.allclose(sum(parts.values()), 20.0)
+
+
+def test_split_weekend_has_no_traffic():
+    parts = split(flat(20), flat(4), day("2026-11-21"), PROF, set())
+    assert (parts["traffic"] == 0).all() and (parts["other"] == 2).all() and (parts["heating"] == 14).all()  # inc 16 - weekend base 2
+
+
+def test_split_holiday_has_no_traffic():
+    parts = split(flat(20), flat(4), day("2026-11-20"), PROF, {dt.date(2026, 11, 20)})
+    assert (parts["traffic"] == 0).all()
+
+
+def test_split_vt_below_regional_is_never_negative():
+    parts = split(flat(3), flat(5), day("2026-11-20"), PROF, set())
+    assert (parts["regional"] == 3).all()
+    assert all((parts[k] == 0).all() for k in ("traffic", "other", "heating"))
+
+
+def test_split_small_excess_goes_to_traffic_first():
+    parts = split(flat(5), flat(4), day("2026-11-20"), PROF, set())
+    assert (parts["traffic"] == 1).all() and (parts["other"] == 0).all() and (parts["heating"] == 0).all()
+
+
+def test_split_nan_regional_counts_as_zero():
+    parts = split(flat(20), flat(np.nan), day("2026-11-20"), PROF, set())
+    assert (parts["regional"] == 0).all() and np.allclose(sum(parts.values()), 20.0)
+
+
+def test_day_shares_weekday():
+    parts = split(flat(20), flat(4), day("2026-11-20"), PROF, set())
+    assert day_shares(parts) == {"heating": 0.65, "traffic": 0.05, "other": 0.1, "regional": 0.2}
+
+
+def test_day_shares_sum_exactly_one():
+    s = day_shares({"heating": flat(1.0), "traffic": flat(1.0), "other": flat(1.0), "regional": flat(0.0)})
+    assert sum(s.values()) == 1.0 and set(s) == {"heating", "traffic", "other", "regional"}
