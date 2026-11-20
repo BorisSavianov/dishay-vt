@@ -209,3 +209,34 @@ Written by `python -m ml.aq_episode` (bundled, static). A real smog day in Velik
              "worst10": { "model_warned": 9, "cams_warned": 10 } }
 }
 ```
+
+### `model.scoreboard` (optional, for the „Защо?“ page „Проверка на живо“)
+
+Written by `ml/aq_forecast.py` every hour. The two parts are:
+- `replay`: from `python -m ml.aq_scoreboard --replay`, cached on Teodor's PC;
+- `live`: the forecasts logged since the loop started, scored as the readings arrive.
+
+Either part may be missing. When both are missing, the whole field is left out, and it never carries mock numbers. The web hides the section when the field is missing.
+
+```jsonc
+"scoreboard": {
+  "updated_at": "2026-11-20T13:07:00+02:00",
+  "replay": {                              // 1–19 Nov 2026, never seen by the models
+    "from": "2026-11-01", "to": "2026-11-19", "issued_local": "12:00",
+    "models": "trained before winter 2025/26",
+    "weather": "forecast",                 // archived forecast runs (Open-Meteo Previous Runs), never newer than the issue time
+    "blh": "none",                         // "none" = no boundary-layer height at all; "era5" = observed BLH: the page MUST say so
+    "days": 19,
+    "mae_pm25_next_day": { "vt": { "model": 3.4, "cams": 6.0, "persistence": 4.9 },   // µg/m³, hourly PM2.5, next-day hours (12–35 h ahead)
+                           "bg": { "model": 3.0, "cams": 7.7, "persistence": 4.2 } },
+    "vt_days": [ { "date": "2026-11-02", "model_pm10": 41.0, "cams_pm10": 22.0, "observed_pm10": 45.3,
+                   "model_level": 2, "observed_level": 2 } ]          // VT city mean, days with >= 18 observed hours
+  },
+  "live": { "since": "2026-11-20T10:00:00+02:00",   // first logged run
+            "checked_hours": 37,                     // distinct forecast hours that have passed and were scored (>= 1)
+            "horizons": "1–6 h",                     // horizons scored so far
+            "mae_pm25": { "model": 2.1, "cams": 4.0, "persistence": 2.6 } }
+}
+```
+
+All three MAEs are computed over the same hours: an hour counts only when the observation, the model, CAMS and persistence are all present.
