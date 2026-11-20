@@ -1288,3 +1288,269 @@ button.legend-row[aria-pressed='false'] {
     display: none;
   }
 }
+
+/* ---------- Air quality ---------- */
+.air-top {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.air-now .eyebrow {
+  margin-bottom: 2px;
+}
+
+.level-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
+.level-num {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.level-chip.is-big {
+  gap: 12px;
+  padding: 10px 22px 10px 10px;
+  font-size: clamp(1.5rem, 4vw, 2.1rem);
+  letter-spacing: -0.02em;
+}
+
+.level-chip.is-big .level-num {
+  width: 44px;
+  height: 44px;
+  font-size: 1.3rem;
+}
+
+.air-now-pm {
+  margin-top: 14px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.air-now-pm span {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.air-advice {
+  margin-top: 10px;
+  max-width: 60ch;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.air-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.air-picker .field {
+  flex: 1 1 180px;
+}
+
+.air-picker .btn {
+  min-height: 44px;
+}
+
+.air-chart {
+  margin-bottom: 18px;
+}
+
+.fc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: -4px 0 10px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.fc-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fc-key {
+  display: inline-block;
+  width: 22px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.fc-key-line {
+  height: 3px;
+  background: var(--accent);
+}
+
+.fc-key-band {
+  background: var(--accent);
+  opacity: 0.22;
+}
+
+.fc-key-cams {
+  height: 0;
+  border-top: 2.5px dashed var(--fg);
+  opacity: 0.6;
+  border-radius: 0;
+}
+
+.chart .fc-band {
+  fill: var(--accent);
+  opacity: 0.18;
+}
+
+.chart .fc-cams {
+  fill: none;
+  stroke: var(--fg);
+  stroke-opacity: 0.55;
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+}
+
+.chart .fc-midnight {
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+
+.chart .fc-cursor {
+  stroke: var(--muted);
+  stroke-opacity: 0.4;
+  stroke-width: 1;
+}
+
+.chart .fc-now-label {
+  font-weight: 700;
+  fill: var(--fg);
+}
+
+.tooltip small {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.tooltip span {
+  display: block;
+}
+
+.section-title {
+  margin: 6px 0 12px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.day-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.day-card {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 10px;
+  border-top: 6px solid var(--line);
+}
+
+.day-name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+  color: var(--muted);
+}
+
+.day-name strong {
+  color: var(--fg);
+  font-size: 1.1rem;
+}
+
+.day-means {
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.eu-flag {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--neg-soft);
+  color: var(--neg);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.reasons {
+  width: 100%;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.reasons-title {
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.reasons ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reasons li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.92rem;
+}
+
+.reason-impact {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .air-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .day-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
