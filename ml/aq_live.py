@@ -207,8 +207,8 @@ def check_collector() -> None:
     snaps = pd.concat([pd.read_csv(p) for p in sorted(LIVE.glob("readings-*.csv"))[-2:]])
     snaps["time"] = pd.to_datetime(snaps["timestamp"], utc=True)
     snaps = snaps.drop_duplicates(["sensor_id", "timestamp"])
-    end = fresh["t"].reindex(snaps["sensor_id"]).to_numpy()
-    win = snaps[(snaps["time"].to_numpy() <= end) & (snaps["time"].to_numpy() > end - np.timedelta64(60, "m"))]
+    end = snaps["sensor_id"].map(fresh["t"])
+    win = snaps[(snaps["time"] <= end) & (snaps["time"] > end - pd.Timedelta(minutes=60))]
     w = win.groupby("sensor_id")[["pm25", "pm10"]].mean()
     clock = snaps[snaps["time"].dt.floor("h") == hour].groupby("sensor_id")[["pm25", "pm10"]].mean()
     log(f"data.1h.json: {len(fresh)} known sensors, readings {fresh['t'].min()} – {fresh['t'].max()}; filed as {hour}")

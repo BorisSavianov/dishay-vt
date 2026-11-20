@@ -63,7 +63,8 @@ Given the latest readings of a citizen PM sensor, its neighbours, the weather fo
 1. Downloads the models and sensor lists from the GitHub Release `models-latest` (`ml/aq_release.py`).
 2. Fetches sensor.community's 1-hour averages (`data.1h.json`) and files them as the last complete hour. It reads the 7 days before from Neon `aq_live_hourly` (`ml/aq_live.py`, kept 8 days). Neither the archive nor a collector is read at inference.
    - `data.1h.json` has no reading count, so each 1-hour mean gets `n = 24`, the archive's median readings per hour. `build_panel` then counts it as a valid hour (it needs ≥ 6), so the uptime rule works as it does on the archive.
-   - It is a rolling 60 minutes, not a clock hour. A run that starts at :20 averages about :20 to :20, a 20-minute shift.
+   - It is the mean of each sensor's readings over a rolling 60 minutes, not a clock hour. A run that starts at :20 averages about :20 to :20, a 20-minute shift.
+   - Checked on 20 Nov 2026 against the 5-minute collector for 586 sensors (`ml.aq_live --check`). Over the same 60 minutes: MAE 0.02 µg/m³ PM2.5, r = 1.000. Against the clock hour it is filed under, 29 minutes earlier: MAE 0.44 µg/m³ PM2.5 (median 0.05) and 0.83 µg/m³ PM10.
 3. Fetches the Open-Meteo and CAMS forecasts for every 0.25° cell, cached for 3 h with `actions/cache`. Shared runner IPs get 429s: a run waits up to three times, then serves the cached copy if it is under 24 h old, and fails only without one.
 4. Predicts 1–96 h for every station on CPU (XGBoost loads the CUDA-trained models with `device=cpu`). Hours past 72 use the 72 h model at its limit, and only the daily cards use them.
    - The CAMS Europe forecast ends about 63 h out. Past its last hour, the model's CAMS inputs repeat CAMS's last forecast day: as NaN, they made the forecast jump from 2.2 to 8.3 µg/m³.
