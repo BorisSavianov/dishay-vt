@@ -147,7 +147,7 @@ export function StationMap({
     const pm = s.pm25[h] ?? -1;
     value.textContent = pm >= 0 ? `PM2.5 ${pm} µg/m³` : lb.nodata;
     const link = document.createElement('a');
-    link.href = `/?station=${encodeURIComponent(s.id)}&lang=${l}`;
+    link.href = `/now?station=${encodeURIComponent(s.id)}&lang=${l}`;
     link.textContent = lb.open;
     root.append(title, city, chip(s.levels[h] ?? 0, l, lb.nodata), value, link);
     return root;
@@ -418,7 +418,7 @@ export function StationMap({
                 return (
                   <tr key={s.id}>
                     <th scope="row">
-                      <a href={`/?station=${encodeURIComponent(s.id)}&lang=${lang}`}>{s.name}</a>
+                      <a href={`/now?station=${encodeURIComponent(s.id)}&lang=${lang}`}>{s.name}</a>
                     </th>
                     <td>{s.city}</td>
                     <td>{l === 0 ? labels.nodata : `${l} · ${levelName(lang, clampLevel(l))}`}</td>
