@@ -255,8 +255,14 @@ These are written by `ml/aq_forecast.py` from `ml/models/aq_sources.json` (`pyth
 // on model
 "sources_what_if": { "method": "estimate", "switch_share": 0.2,     // 20% of wood-heated homes switch heating
                      "date": "2026-11-21", "evening_drop_pm25": 3.1, // µg/m³, mean over that date's 18:00–23:59
-                     "last_winter": { "bad_days": 15, "bad_days_after": 11, "days": 170 } }  // winter 2025/26, EAQI >= 3
+                     "last_winter": {                                 // optional; observed VT, winter 2025/26 (the holdout)
+                       "from": "2025-10-01", "to": "2026-03-31",      // the season it covers (local dates)
+                       "bad_days": 23, "bad_days_after": 14, "days": 182,   // days at EAQI >= 3 (>= 18 observed hours), before/after the switch
+                       "shares": { "heating": 0.55, "traffic": 0.03, "regional": 0.25, "other": 0.17 } } }
+                                                                      // the season's PM2.5 split: same keys and rule as daily[].sources
 ```
+
+`last_winter` and its `shares` are both optional, and they only ever carry real numbers from `python -m ml.aq_sources --profiles`, never mock values. The web hides the season split when `shares` is missing. The labels for the four keys live in the web strings (`web/src/lib/aq/sources.ts`), the same as for `daily[].sources`. The page states the basis using `from`/`to` and the method paragraph.
 
 How the split works:
 - **regional:** the 20th percentile of forecasts for stations 15–80 km from VT.

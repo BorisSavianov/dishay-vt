@@ -138,6 +138,15 @@ def bad_days(vt25: np.ndarray, vt10: np.ndarray, local: pd.DatetimeIndex, heatin
     return n
 
 
+def last_winter_block(vt25: np.ndarray, vt10: np.ndarray, reg: np.ndarray, local: pd.DatetimeIndex, prof: dict,
+                      holidays: set, start: str, end: str, share: float = SHARE) -> dict:
+    """Observed season split and bad days before/after the switch: `model.sources_what_if.last_winter`."""
+    parts = split(vt25, reg, local, prof, holidays)
+    counts = pd.Series(~np.isnan(np.asarray(vt25, dtype=float))).groupby(np.array(local.date)).sum()
+    return {"bad_days": bad_days(vt25, vt10, local), "bad_days_after": bad_days(vt25, vt10, local, parts["heating"], share),
+            "days": int((counts >= 18).sum()), "from": start, "to": end, "shares": day_shares(parts)}
+
+
 def load_sources_json(path: Path = OUT) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
@@ -190,16 +199,12 @@ def main_profiles() -> None:
     with np.errstate(all="ignore"), warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         vt10 = np.nanmean(p.pm10[:, vt_cols], axis=1).astype(float)[hold]
-    vt25 = series["vt"].to_numpy()[hold]
-    parts = split(vt25, series["regional"].to_numpy()[hold], local, prof, holidays)
-    counts = pd.Series(~np.isnan(vt25)).groupby(np.array(local.date)).sum()
-    last = {"bad_days": bad_days(vt25, vt10, local), "bad_days_after": bad_days(vt25, vt10, local, parts["heating"]),
-            "days": int((counts >= 18).sum())}
-    shares = day_shares(parts)
+    last = last_winter_block(series["vt"].to_numpy()[hold], vt10, series["regional"].to_numpy()[hold], local, prof,
+                             holidays, HOLDOUT[0].date().isoformat(), HOLDOUT[1].date().isoformat())  # UTC season
     print(f"last winter: bad days {last['bad_days']} → {last['bad_days_after']} after a {SHARE:.0%} switch "
-          f"({last['days']} days); season shares {shares}")
+          f"({last['days']} days); season shares {last['shares']}")
     out = {"built_at": pd.Timestamp.now(tz=TZ).isoformat(timespec="seconds"), "share": SHARE,
-           "method": "estimate", "profiles": prof, "last_winter": last, "last_winter_shares": shares}
+           "method": "estimate", "profiles": prof, "last_winter": last}
     b, t = prof["baseline"], prof["traffic"]
     print(f"baseline 08:00 weekday {b['weekday'][8]} weekend {b['weekend'][8]} | 21:00 weekday {b['weekday'][21]} "
           f"weekend {b['weekend'][21]} | traffic peak {max(t)} at {t.index(max(t)):02d}:00")

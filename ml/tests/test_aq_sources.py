@@ -201,3 +201,30 @@ def test_sources_payload_what_if_shape():
 def test_evening_drop_all_nan_is_zero():
     local = pd.date_range(pd.Timestamp("2026-11-21", tz=TZ), periods=24, freq="h")
     assert evening_drop({"heating": flat(np.nan)}, local, dt.date(2026, 11, 21)) == 0.0
+
+
+# ---------------- Fold-in: last winter's season shares (Boris's shape) ----------------
+
+from ml.aq_sources import last_winter_block
+
+
+def test_last_winter_block_shape_and_shares():
+    local = pd.date_range(pd.Timestamp("2026-01-10", tz=TZ), periods=72, freq="h")   # Sat, Sun, Mon
+    pm25 = flat(20, 72)
+    b = last_winter_block(pm25, pm25 * 1.6, flat(4, 72), local, PROF, set(), "2025-10-01", "2026-03-31")
+    assert set(b) == {"bad_days", "bad_days_after", "days", "from", "to", "shares"}
+    assert (b["from"], b["to"], b["days"]) == ("2025-10-01", "2026-03-31", 3)
+    assert set(b["shares"]) == {"heating", "traffic", "regional", "other"} and sum(b["shares"].values()) == 1.0
+    assert b["shares"]["regional"] == 0.2
+
+
+def test_contract_accepts_last_winter_shares():
+    w = copy.deepcopy(WHAT_IF)
+    w["last_winter"].update({"from": "2025-10-01", "to": "2026-03-31", "shares": SOURCES})
+    assert validate(payload_with_sources(what_if=w)) == []
+
+
+def test_contract_rejects_bad_last_winter_shares():
+    w = copy.deepcopy(WHAT_IF)
+    w["last_winter"]["shares"] = dict(SOURCES, heating=0.3)
+    assert any("sources_what_if.last_winter.shares" in e for e in validate(payload_with_sources(what_if=w)))

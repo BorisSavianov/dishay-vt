@@ -1,5 +1,5 @@
 {
- "built_at": "2026-11-20T12:29:36+02:00",
+ "built_at": "2026-11-20T12:41:59+02:00",
  "share": 0.2,
  "method": "estimate",
  "profiles": {
@@ -141,12 +141,14 @@
  "last_winter": {
   "bad_days": 23,
   "bad_days_after": 14,
-  "days": 182
- },
- "last_winter_shares": {
-  "heating": 0.55,
-  "traffic": 0.03,
-  "other": 0.17,
-  "regional": 0.25
+  "days": 182,
+  "from": "2025-10-01",
+  "to": "2026-03-31",
+  "shares": {
+   "heating": 0.55,
+   "traffic": 0.03,
+   "other": 0.17,
+   "regional": 0.25
+  }
  }
 }
