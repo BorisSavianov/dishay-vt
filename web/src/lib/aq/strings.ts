@@ -209,6 +209,19 @@ const bg = {
   'sb.sub': 'Прогнози, издадени всеки ден в 12:00 от {from} до {to}, проверени срещу измереното на следващия ден. PM2.5, µg/m³; по-късата лента е по-добре.',
   'sb.days.title': 'Велико Търново ден по ден, PM10 (µg/m³)',
   'sb.observed': 'Измерено',
+  'day.clean': 'Чист въздух – няма рискови фактори',
+  'src.season.title': 'Кой замърсява във Велико Търново?',
+  'src.season.sub': 'Миналата зима ({from}–{to}): оценка какъв дял от фините частици идва от какво.',
+  'src.season.sub.plain': 'Миналата зима: оценка какъв дял от фините частици идва от какво.',
+  'src.bar.alt': 'Диаграма: дялове на източниците на PM2.5, оценка',
+  'm.src.title': 'Как оценяваме източниците',
+  'm.src.body': 'Регионалният фон е 20-ият процентил на сензорите на 15–80 км от ВТ. Над него – постоянният местен дял от топлите дни (по час и делник/почивен ден), като трафикът е разликата делник − почивен ден. Всичко над това при под 10 °C отчитаме като отопление (при по-топло време – като „друго“). Две изкривявания: в студени нощи с инверсия и трафикът се задържа, затова отоплението може да е надценено, а ефектът от смяната – горна граница; „пренос“ включва и дима от околните села.',
+  'web.model.season': 'Този сезон във Велико Търново ({from}–{to}, с реалната прогноза за времето): средна грешка за утре – нашият модел {model}, CAMS {cams} µg/m³.',
+  'web.model.vt': 'Миналата зима във Велико Търново: средна грешка за 24 часа – нашият модел {model}, CAMS {cams}, „утре = днес“ {persistence} µg/m³.',
+  'why.warn.label': 'Предупредихме вечерта преди',
+  'why.warn.value': '{hits} от {bad}',
+  'why.warn.sub': 'лоши дни миналата зима. CAMS: {cams} от {bad}, но с {cf} фалшиви тревоги (ние: {mf}).',
+  'm.f1': 'За дните с PM10 над нормата на ЕС мярката F1 е {model} при нашия модел и {cams} при CAMS (1 е идеално, 0 е никакво).',
 } as const;
 
 export type AirKey = keyof typeof bg;
@@ -419,6 +432,19 @@ const en: Record<AirKey, string> = {
   'sb.sub': 'Forecasts issued every day at 12:00 from {from} to {to}, checked against what was measured the next day. PM2.5, µg/m³; a shorter bar is better.',
   'sb.days.title': 'Veliko Tarnovo day by day, PM10 (µg/m³)',
   'sb.observed': 'Measured',
+  'day.clean': 'Clean air – no risk factors',
+  'src.season.title': 'Who pollutes Veliko Tarnovo?',
+  'src.season.sub': 'Last winter ({from}–{to}): an estimate of how much of the fine particles comes from what.',
+  'src.season.sub.plain': 'Last winter: an estimate of how much of the fine particles comes from what.',
+  'src.bar.alt': 'Chart: shares of the PM2.5 sources, an estimate',
+  'm.src.title': 'How we estimate the sources',
+  'm.src.body': 'The regional background is the 20th percentile of the sensors 15–80 km from Veliko Tarnovo. Above it, the constant local share from warm days (by hour and weekday/weekend), with traffic as the weekday minus weekend difference. Everything above that on hours below 10 °C we count as heating (in milder weather as "other"). Two biases: on cold inversion nights traffic smoke is trapped too, so heating may be over-credited and the effect of the switch is an upper bound; "carried in" includes the smoke of nearby villages.',
+  'web.model.season': 'This season in Veliko Tarnovo ({from}–{to}, with the real weather forecast): mean error for tomorrow – our model {model}, CAMS {cams} µg/m³.',
+  'web.model.vt': 'Last winter in Veliko Tarnovo: mean error 24 hours ahead – our model {model}, CAMS {cams}, "tomorrow = today" {persistence} µg/m³.',
+  'why.warn.label': 'We warned the evening before',
+  'why.warn.value': '{hits} of {bad}',
+  'why.warn.sub': 'bad days last winter. CAMS: {cams} of {bad}, but with {cf} false alarms (us: {mf}).',
+  'm.f1': 'For the days with PM10 above the EU limit the F1 score is {model} for our model and {cams} for CAMS (1 is perfect, 0 is none).',
 };
 
 const table: Record<Lang, Record<AirKey, string>> = { bg, en };

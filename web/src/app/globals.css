@@ -2070,3 +2070,76 @@ button.legend-row[aria-pressed='false'] {
   fill: var(--fg);
   background: var(--fg);
 }
+
+/* ---------- Pollution sources (estimate) ---------- */
+:root {
+  --src-heating: #c2410c;
+  --src-traffic: #2563eb;
+  --src-regional: #0d8a7d;
+  --src-other: #9aa0b8;
+}
+
+:root[data-theme='dark'] {
+  --src-heating: #fb923c;
+  --src-traffic: #60a5fa;
+  --src-regional: #2dd4bf;
+  --src-other: #7d83a6;
+}
+
+.src {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.src-bar {
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.src-seg {
+  display: block;
+  height: 100%;
+}
+
+.src-seg + .src-seg {
+  border-left: 2px solid var(--surface);
+}
+
+.src-seg.is-heating {
+  background: var(--src-heating);
+}
+.src-seg.is-traffic {
+  background: var(--src-traffic);
+}
+.src-seg.is-regional {
+  background: var(--src-regional);
+}
+.src-seg.is-other {
+  background: var(--src-other);
+}
+
+.src-line {
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.day-clean {
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.what-if {
+  margin: 0 0 18px;
+}
+
+.card .what-if {
+  margin: 14px 0 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}

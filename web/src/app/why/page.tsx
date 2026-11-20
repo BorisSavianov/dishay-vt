@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
 import { EpisodeChart } from '@/components/aq/EpisodeChart';
+import { SourceBar } from '@/components/aq/SourceBar';
 import { LevelChip } from '@/components/aq/Level';
 import { LineChart } from '@/components/aq/LineChart';
 import { ScoreboardSection } from '@/components/aq/ScoreboardSection';
 import { dayBefore, readEpisode } from '@/lib/aq/episode';
 import { PM25_BANDS } from '@/lib/aq/levels';
+import { dmy, whatIfLine } from '@/lib/aq/sources';
 import { Kpi } from '@/components/Kpi';
 import { AppShell } from '@/components/shell/AppShell';
 import deaths from '@/data/pm25_deaths_bg_eu.json';
@@ -48,14 +50,15 @@ export default async function Why({ searchParams }: { searchParams: SearchParams
   const better = pctBetter(m.mae.model, m.mae.cams);
   const betterVt = m.mae_vt ? pctBetter(m.mae_vt.model, m.mae_vt.cams) : null;
   const horizons = m.mae_by_horizon ?? [];
-  const f1 = m.exceedance_f1;
+  const episode = readEpisode();
+  const ep1 = episode ? dayBefore(episode) : null;
+  const score = episode?.score;
+  const lastWinter = m.sources_what_if?.last_winter;
+  const whatIf = m.sources_what_if ? whatIfLine(m.sources_what_if, lang) : null;
   const bgLast = eurostat.bg[eurostat.bg.length - 1];
   const euSame = bgLast ? eurostat.eu.find((p) => p.year === bgLast.year) : undefined;
   const years = eurostat.bg.map((p) => p.year).filter((y) => eurostat.eu.some((p) => p.year === y));
-  const episode = readEpisode();
   const sbView = scoreboardView(m.scoreboard, lang);
-  const ep1 = episode ? dayBefore(episode) : null;
-  const score = episode?.score;
 
   return (
     <AppShell lang={lang} active="why" title={tr('why.title')} lead={tr('why.lead')} updated={forecast.generated_at}>
@@ -78,9 +81,14 @@ export default async function Why({ searchParams }: { searchParams: SearchParams
                 {tr('why.kpi.sub', { holdout })}
               </Kpi>
             )}
-            {f1 && (
-              <Kpi icon="activity" label={tr('why.f1.title')} value={`${fmtNum(lang, f1.model, 2)} / ${fmtNum(lang, f1.cams, 2)}`}>
-                {tr('why.f.model')} / CAMS, F1
+            {score && (
+              <Kpi icon="activity" label={tr('why.warn.label')} value={tr('why.warn.value', { hits: score.model_alert.hits, bad: score.bad_days })}>
+                {tr('why.warn.sub', {
+                  cams: score.cams.hits,
+                  bad: score.bad_days,
+                  cf: score.cams.false_alarms,
+                  mf: score.model_alert.false_alarms,
+                })}
               </Kpi>
             )}
             <Kpi icon="database" label={tr('why.kpi.rows')} value={fmtInt(lang, m.trained_rows)}>
@@ -183,25 +191,18 @@ export default async function Why({ searchParams }: { searchParams: SearchParams
               </section>
             )}
 
-            {f1 && (
-              <section className="card insight" aria-labelledby="f1-title">
-                <h2 className="card-title" id="f1-title">
-                  {tr('why.f1.title')}
+            {lastWinter?.shares && (
+              <section className="card" aria-labelledby="src-title">
+                <h2 className="card-title" id="src-title">
+                  {tr('src.season.title')}
                 </h2>
-                <p className="card-sub">{tr('why.f1.sub')}</p>
-                <div className="f1-pair">
-                  <p>
-                    <strong>{fmtNum(lang, f1.model, 2)}</strong>
-                    <span>{tr('why.f.model')}</span>
-                  </p>
-                  <p>
-                    <strong>{fmtNum(lang, f1.cams, 2)}</strong>
-                    <span>{tr('why.f.cams')}</span>
-                  </p>
-                </div>
-                {f1.cams > 0 && (
-                  <p className="insight-text">{tr('why.f1.body', { times: fmtNum(lang, f1.model / f1.cams, 1) })}</p>
-                )}
+                <p className="card-sub">
+                  {lastWinter.from && lastWinter.to
+                    ? tr('src.season.sub', { from: dmy(lastWinter.from), to: dmy(lastWinter.to) })
+                    : tr('src.season.sub.plain')}
+                </p>
+                <SourceBar sources={lastWinter.shares} lang={lang} />
+                {whatIf && <p className="insight-text what-if">{whatIf}</p>}
               </section>
             )}
           </div>
