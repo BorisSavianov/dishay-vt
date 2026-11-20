@@ -257,8 +257,8 @@ These are written by `ml/aq_forecast.py` from `ml/models/aq_sources.json` (`pyth
                      "date": "2026-11-21", "evening_drop_pm25": 3.1, // µg/m³, mean over that date's 18:00–23:59
                      "last_winter": {                                 // optional; observed VT, winter 2025/26 (the holdout)
                        "from": "2025-10-01", "to": "2026-03-31",      // the season it covers (local dates)
-                       "bad_days": 23, "bad_days_after": 14, "days": 182,   // days at EAQI >= 3 (>= 18 observed hours), before/after the switch
-                       "shares": { "heating": 0.55, "traffic": 0.03, "regional": 0.25, "other": 0.17 } } }
+                       "bad_days": 23, "bad_days_after": 15, "days": 182,   // days at EAQI >= 3 (>= 18 observed hours), before/after the switch
+                       "shares": { "heating": 0.45, "traffic": 0.03, "regional": 0.25, "other": 0.27 } } }
                                                                       // the season's PM2.5 split: same keys and rule as daily[].sources
 ```
 
@@ -268,8 +268,8 @@ How the split works:
 - **regional:** the 20th percentile of forecasts for stations 15–80 km from VT.
 - **always-on local excess:** taken from warm hours (> 10 °C) by hour and weekday/weekend, using the winters before the holdout.
 - **traffic:** that excess on weekdays minus weekends.
-- **heating:** the rest of the local excess.
+- **heating:** the rest of the local excess, counted only on hours below 10 °C at the VT cell. On milder hours it goes to „друго“, because an inversion on a mild day is not home heating.
 
 Two biases to state:
-- on inversion nights, traffic smoke is trapped too, so heating is slightly over-credited;
+- on cold inversion nights, traffic smoke is trapped too, so heating may still be over-credited, and the what-if is an upper bound for that reason;
 - „пренос“ includes the smoke of nearby villages.

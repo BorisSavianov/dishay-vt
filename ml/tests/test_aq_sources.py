@@ -228,3 +228,33 @@ def test_contract_rejects_bad_last_winter_shares():
     w = copy.deepcopy(WHAT_IF)
     w["last_winter"]["shares"] = dict(SOURCES, heating=0.3)
     assert any("sources_what_if.last_winter.shares" in e for e in validate(payload_with_sources(what_if=w)))
+
+
+# ---------------- Final review fix: heating only below 10 °C ----------------
+
+def test_split_warm_hours_have_no_heating():
+    parts = split(flat(20), flat(4), day("2026-11-20"), PROF, set(), temp=flat(12))
+    assert (parts["heating"] == 0).all() and (parts["traffic"] == 1).all() and (parts["other"] == 15).all()
+    assert np.allclose(sum(parts.values()), 20.0)
+
+
+def test_split_cold_hours_keep_heating():
+    parts = split(flat(20), flat(4), day("2026-11-20"), PROF, set(), temp=flat(5))
+    assert (parts["heating"] == 13).all()
+
+
+def test_split_unknown_temperature_is_not_heating():
+    parts = split(flat(20), flat(4), day("2026-11-20"), PROF, set(), temp=flat(np.nan))
+    assert (parts["heating"] == 0).all()
+
+
+def test_sources_payload_warm_forecast_has_no_heating():
+    shares, what_if = sources_payload(flat(20, 58), flat(4, 58), LOCAL58, DATES, PROF_JSON, set(), temp_fc=flat(12, 58))
+    assert all(s["heating"] == 0.0 for s in shares.values()) and what_if["evening_drop_pm25"] == 0.0
+
+
+def test_last_winter_block_warm_season_switch_changes_nothing():
+    local = pd.date_range(pd.Timestamp("2026-01-10", tz=TZ), periods=72, freq="h")
+    pm25 = flat(16, 72)
+    b = last_winter_block(pm25, pm25 * 1.6, flat(4, 72), local, PROF, set(), "2025-10-01", "2026-03-31", temp=flat(12, 72))
+    assert b["bad_days_after"] == b["bad_days"] == 3 and b["shares"]["heating"] == 0.0

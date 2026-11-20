@@ -316,8 +316,12 @@ def run_once(write_db: bool = True) -> dict:
                 vt_fc = np.nanmean(P25[dkm <= FEATURED_KM], axis=0)
                 reg_fc = np.nanpercentile(reg, 20, axis=0) if len(reg) else np.full(len(H), np.nan)
             dates = [(today + dt.timedelta(days=off)).isoformat() for off in (1, 2, 3)]
+            vt_cell = panel.sensor_cell[cols[dkm <= FEATURED_KM]]
+            vt_cell = vt_cell[vt_cell >= 0]
+            temp_fc = (panel.weather["temperature_2m"][i + H, int(np.bincount(vt_cell).argmax())]
+                       if len(vt_cell) else np.full(len(H), np.nan))   # forecast °C at the VT cell; heating only < 10 °C
             shares, what_if = sources_payload(vt_fc, reg_fc, times_local[i + H], dates, src,
-                                              _bg_holidays({today.year, today.year + 1}))
+                                              _bg_holidays({today.year, today.year + 1}), temp_fc)
             for s in stations:
                 if s["featured"]:
                     for item in s["daily"]:

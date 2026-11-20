@@ -7,8 +7,8 @@ Method (increment tables, no chemistry: an estimate, and labelled so everywhere)
 - regional background = the 20th percentile of sensors 15–80 km from VT; local excess = VT city mean above it;
 - the always-on local excess = its median on warm hours (> 10 °C), by local hour and weekday/weekend (+ BG holidays),
   from the winters before the holdout; traffic = weekday minus weekend in that baseline;
-- heating = the local excess above the baseline.
-Two biases (say them): inversion nights also trap traffic smoke, so heating is slightly over-credited; „пренос“
+- heating = the local excess above the baseline, counted only below 10 °C at the VT cell (else it is "other").
+Two biases (say them): on cold inversion nights traffic smoke is trapped too, so heating may still be over-credited; „пренос“
 includes the smoke of nearby villages. Writes ml/models/aq_sources.json (contract/CONTRACT.md "sources")."""
 from __future__ import annotations
 
@@ -81,18 +81,28 @@ def build_profiles(series: pd.DataFrame, temp: pd.Series, holidays: set) -> dict
 PARTS = ("heating", "traffic", "other", "regional")
 
 
-def split(vt: np.ndarray, reg: np.ndarray, local: pd.DatetimeIndex, prof: dict, holidays: set) -> dict[str, np.ndarray]:
+def split(vt: np.ndarray, reg: np.ndarray, local: pd.DatetimeIndex, prof: dict, holidays: set,
+          temp: np.ndarray | None = None) -> dict[str, np.ndarray]:
     """Split PM2.5 hours into regional, traffic, other (always-on local) and heating. Never negative; the four
-    parts add up to `vt` at every hour. A NaN regional value counts as 0."""
+    parts add up to `vt` at every hour. A NaN regional value counts as 0.
+    With `temp` (°C at the VT cell), heating is counted only below WARM_C; on warmer or unknown hours the excess
+    above the baseline goes to "other" (an inversion on a mild day is not home heating)."""
     vt = np.maximum(np.asarray(vt, dtype=float), 0.0)
-    regional = np.minimum(np.nan_to_num(np.asarray(reg, dtype=float), nan=0.0), vt)
+    regional = np.minimum(np.maximum(np.nan_to_num(np.asarray(reg, dtype=float), nan=0.0), 0.0), vt)
     inc = vt - regional
     weekend = daytype(local, holidays)
     hour = np.asarray(local.hour)
     baseline = np.where(weekend, np.asarray(prof["baseline"]["weekend"])[hour], np.asarray(prof["baseline"]["weekday"])[hour])
     base = np.minimum(inc, baseline)
     traffic = np.where(weekend, 0.0, np.minimum(base, np.asarray(prof["traffic"])[hour]))
-    return {"heating": inc - base, "traffic": traffic, "other": base - traffic, "regional": regional}
+    above = inc - base
+    if temp is None:
+        heating = above
+    else:
+        with np.errstate(invalid="ignore"):
+            cold = np.asarray(temp, dtype=float) < WARM_C   # NaN compares False: unknown is not heating
+        heating = np.where(cold, above, 0.0)
+    return {"heating": heating, "traffic": traffic, "other": base - traffic + (above - heating), "regional": regional}
 
 
 def day_shares(parts: dict[str, np.ndarray]) -> dict[str, float]:
@@ -139,9 +149,9 @@ def bad_days(vt25: np.ndarray, vt10: np.ndarray, local: pd.DatetimeIndex, heatin
 
 
 def last_winter_block(vt25: np.ndarray, vt10: np.ndarray, reg: np.ndarray, local: pd.DatetimeIndex, prof: dict,
-                      holidays: set, start: str, end: str, share: float = SHARE) -> dict:
+                      holidays: set, start: str, end: str, share: float = SHARE, temp: np.ndarray | None = None) -> dict:
     """Observed season split and bad days before/after the switch: `model.sources_what_if.last_winter`."""
-    parts = split(vt25, reg, local, prof, holidays)
+    parts = split(vt25, reg, local, prof, holidays, temp)
     counts = pd.Series(~np.isnan(np.asarray(vt25, dtype=float))).groupby(np.array(local.date)).sum()
     return {"bad_days": bad_days(vt25, vt10, local), "bad_days_after": bad_days(vt25, vt10, local, parts["heating"], share),
             "days": int((counts >= 18).sum()), "from": start, "to": end, "shares": day_shares(parts)}
@@ -152,9 +162,9 @@ def load_sources_json(path: Path = OUT) -> dict | None:
 
 
 def sources_payload(vt_fc: np.ndarray, reg_fc: np.ndarray, local: pd.DatetimeIndex, dates: list[str],
-                    prof_json: dict, holidays: set) -> tuple[dict[str, dict], dict]:
+                    prof_json: dict, holidays: set, temp_fc: np.ndarray | None = None) -> tuple[dict[str, dict], dict]:
     """Day shares for each forecast date that has hours, and the contract's `sources_what_if`."""
-    parts = split(vt_fc, reg_fc, local, prof_json["profiles"], holidays)
+    parts = split(vt_fc, reg_fc, local, prof_json["profiles"], holidays, temp_fc)
     day = np.array([d.isoformat() for d in local.date])
     shares = {}
     for d in dates:
@@ -200,7 +210,8 @@ def main_profiles() -> None:
         warnings.simplefilter("ignore", RuntimeWarning)
         vt10 = np.nanmean(p.pm10[:, vt_cols], axis=1).astype(float)[hold]
     last = last_winter_block(series["vt"].to_numpy()[hold], vt10, series["regional"].to_numpy()[hold], local, prof,
-                             holidays, HOLDOUT[0].date().isoformat(), HOLDOUT[1].date().isoformat())  # UTC season
+                             holidays, HOLDOUT[0].date().isoformat(), HOLDOUT[1].date().isoformat(),  # UTC season
+                             temp=temp.to_numpy()[hold])
     print(f"last winter: bad days {last['bad_days']} → {last['bad_days_after']} after a {SHARE:.0%} switch "
           f"({last['days']} days); season shares {last['shares']}")
     out = {"built_at": pd.Timestamp.now(tz=TZ).isoformat(timespec="seconds"), "share": SHARE,
