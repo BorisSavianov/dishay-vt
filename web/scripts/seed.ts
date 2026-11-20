@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { neon } from '@neondatabase/serverless';
 
@@ -36,4 +36,34 @@ for (const [name, file] of files) {
     [name, JSON.stringify(payload), payload.meta.as_of],
   );
   console.log(`seeded ${name}`);
+}
+
+// The air-quality forecast, only when Teodor's committed file exists. The demo forecast is never seeded,
+// so the database never holds invented numbers.
+const aqPath = fileURLToPath(new URL('../src/data/aq_forecast.json', import.meta.url));
+if (existsSync(aqPath)) {
+  const aq = JSON.parse(readFileSync(aqPath, 'utf8')) as {
+    generated_at: string;
+    model: unknown;
+    stations: { id: string }[];
+  };
+  // Same rule as ml/aq_forecast.py: replace the whole run in one transaction.
+  await sql.transaction((tx) => [
+    tx.query('delete from aq_forecast'),
+    tx.query('insert into aq_forecast (id, generated_at, payload) values ($1, $2, $3)', [
+      '_model',
+      aq.generated_at,
+      JSON.stringify({ generated_at: aq.generated_at, model: aq.model }),
+    ]),
+    ...aq.stations.map((station) =>
+      tx.query('insert into aq_forecast (id, generated_at, payload) values ($1, $2, $3)', [
+        station.id,
+        aq.generated_at,
+        JSON.stringify(station),
+      ]),
+    ),
+  ]);
+  console.log(`seeded aq_forecast: ${aq.stations.length} stations`);
+} else {
+  console.log('no src/data/aq_forecast.json yet: aq_forecast left as it is');
 }

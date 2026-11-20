@@ -154,3 +154,18 @@ Each run replaces all rows in one transaction (stations missing from the run are
 ### `GET /api/aq/<station id>`
 
 One `AqStation` with `hourly` (72 items). `404` for an unknown id.
+
+### Web implementation of the two routes
+
+- Both return bare JSON (no `ok` wrapper) plus `source`: `"database"` (Neon), `"bundled"` (`web/src/data/aq_forecast.json`) or `"demo"`. `"demo"` means invented numbers: either `model.kind` is `"mock"`, or neither Neon nor the file has a forecast and the web built one with the same generator as `mobile/src/aq/mock.ts`. A client must label `"demo"` as demo data. The same value is in the `X-Data-Source` header.
+- Unknown station: `404 { "ok": false, "error": { "code": "not_found", "message" } }`.
+- Headers: `Access-Control-Allow-Origin: *`; `Cache-Control: public, s-maxage=300, stale-while-revalidate=600` (errors: `no-store`).
+- Web copies of the types and levels: `web/src/lib/aq/` (`types.ts`, `levels.ts`, `mock.ts`, `strings.ts`). Change band edges in every copy at once.
+- `GET /api/health` also returns `aq: { source, generated_at, model, stations }`.
+
+### Optional model fields (web „Защо?“ page)
+
+All optional; the page hides a block whose field is missing.
+
+- `model.importances`: `[{ feature, label_bg, label_en?, value }]`, global feature importance, largest first.
+- `model.episode`: `{ station_id, date, issued_at, observed: [{ t, pm10 }], predicted: [{ t, pm10 }], cams?: [{ t, pm10 }] }`, one past smog day and the forecast issued 24–48 h before it.
