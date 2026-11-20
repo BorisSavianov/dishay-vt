@@ -53,6 +53,15 @@ describe('barTargets', () => {
   });
 });
 
+describe('barTargets draw range', () => {
+  it('keeps both bars within the first half of the particles', () => {
+    const { group } = barTargets(10000, STORY_FACTS.maeVt);
+    const half = group.subarray(0, 5000);
+    const model = half.filter((x) => x === 0).length / 5000;
+    expect(model).toBeCloseTo(3.2 / (3.2 + 6.1), 1);
+  });
+});
+
 describe('streamTargets', () => {
   it('gives each source a share of particles', () => {
     const { group } = streamTargets(10000, STORY_FACTS.sources);
@@ -61,6 +70,17 @@ describe('streamTargets', () => {
     expect(Math.abs(count(1) - 2500)).toBeLessThanOrEqual(1);
     expect(Math.abs(count(2) - 2700)).toBeLessThanOrEqual(1);
     expect(Math.abs(count(3) - 300)).toBeLessThanOrEqual(1);
+  });
+
+  // The performance monitor can halve the draw range: the first half of the particles must still hold every stream.
+  it('keeps every stream in proportion within the first half of the particles', () => {
+    const { group } = streamTargets(10000, STORY_FACTS.sources);
+    const half = group.subarray(0, 5000);
+    const share = (g: number) => half.filter((x) => x === g).length / 5000;
+    expect(share(0)).toBeCloseTo(0.45, 1);
+    expect(share(1)).toBeCloseTo(0.25, 1);
+    expect(share(2)).toBeCloseTo(0.27, 1);
+    expect(share(3)).toBeGreaterThan(0.01);
   });
 
   it('is deterministic for a seed', () => {

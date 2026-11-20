@@ -111,6 +111,15 @@
   white-space: nowrap;
 }
 
+/* On phones the cards are taller than the screen and scroll under the bar: give it a frosted backing. */
+@media (max-width: 720px) {
+  .bar {
+    background: rgba(8, 9, 28, 0.55);
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  }
+}
+
 @media (max-width: 480px) {
   .brandText {
     display: none;
@@ -120,4 +129,44 @@
     padding: 7px 10px;
     font-size: 0.78rem;
   }
+}
+
+/* Daylight chapters (7–8): the chrome follows the light glass cards. */
+.bar {
+  transition:
+    color 0.6s,
+    background 0.6s;
+}
+
+.bar.day {
+  color: #14152e;
+  background: linear-gradient(180deg, rgba(246, 247, 255, 0.75), rgba(246, 247, 255, 0));
+}
+
+.bar.day .barEnd :global(.seg) {
+  background: rgba(20, 21, 46, 0.06);
+  border-color: rgba(20, 21, 46, 0.14);
+}
+
+.bar.day .barEnd :global(.seg a) {
+  color: #14152e;
+}
+
+.rail.day .dot::before {
+  background: rgba(20, 21, 46, 0.3);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+.rail.day .dot:hover::before {
+  background: rgba(20, 21, 46, 0.6);
+}
+
+@media (max-width: 720px) {
+  .bar.day {
+    background: rgba(246, 247, 255, 0.72);
+  }
+}
+
+.rail.day .dot[aria-current='step']::before {
+  background: #e8892b;
 }

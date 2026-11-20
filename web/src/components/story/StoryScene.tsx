@@ -63,6 +63,12 @@ export default function StoryScene({ data, mode, capture = false, onLost, onRead
             if (declines.current === 1) setDpr(1);
             else if (fps < 40) sceneStore.drawScale = 0.5;
           }}
+          // A stall (shader compile, a hidden tab) can trigger a decline; recover when the frame rate comes back.
+          onIncline={() => {
+            declines.current = 0;
+            sceneStore.drawScale = 1;
+            setDpr(maxDpr);
+          }}
         />
       )}
       <AdaptiveDpr pixelated={false} />

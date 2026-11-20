@@ -40,6 +40,23 @@ export type Targets = { positions: Float32Array; group: Uint8Array };
 export const BAR_LAYOUT = { base: 0.6, maxHeight: 4.2, width: 1.1, depth: 0.7, gap: 2.4, z: 0.5 };
 
 // Two vertical bars over the valley: group 0 = our model (left), group 1 = CAMS (right). Height ∝ MAE.
+// Seeded Fisher–Yates over the targets, so any leading slice (a reduced draw range) holds every group in proportion.
+function shuffleTargets(t: Targets, rand: () => number): Targets {
+  const { positions, group } = t;
+  for (let i = group.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    const g = group[i]!;
+    group[i] = group[j]!;
+    group[j] = g;
+    for (let c = 0; c < 3; c++) {
+      const p = positions[i * 3 + c]!;
+      positions[i * 3 + c] = positions[j * 3 + c]!;
+      positions[j * 3 + c] = p;
+    }
+  }
+  return t;
+}
+
 export function barTargets(count: number, mae: { model: number; cams: number }, seed = 11): Targets {
   const rand = mulberry32(seed);
   const top = Math.max(mae.model, mae.cams);
@@ -57,7 +74,7 @@ export function barTargets(count: number, mae: { model: number; cams: number }, 
       group[k] = g;
     }
   }
-  return { positions, group };
+  return shuffleTargets({ positions, group }, rand);
 }
 
 export type SourceShares = { heating: number; regional: number; other: number; traffic: number };
@@ -86,5 +103,5 @@ export function streamTargets(count: number, shares: SourceShares, seed = 23): T
       group[k] = g;
     }
   });
-  return { positions, group };
+  return shuffleTargets({ positions, group }, rand);
 }

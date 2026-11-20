@@ -9,7 +9,7 @@ import css from './chrome.module.css';
 export function ProgressRail({ lang, goTo }: { lang: Lang; goTo: (n: number) => void }) {
   const chapter = useChapter();
   return (
-    <nav className={css.rail} aria-label={story(lang, 'rail.label')}>
+    <nav className={`${css.rail} ${chapter >= 7 ? css.day : ''}`} aria-label={story(lang, 'rail.label')}>
       {Array.from({ length: CHAPTERS }, (_, i) => i + 1).map((n) => (
         <button
           key={n}
