@@ -36,6 +36,7 @@ export type AqStation = {
 
 export type AqModel = {
   name: string;
+  kind?: string; // "mock" = invented numbers, "trained" = real
   trained_rows: number;
   sensors: number;
   holdout: string;

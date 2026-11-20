@@ -47,19 +47,23 @@ if (existsSync(aqPath)) {
     model: unknown;
     stations: { id: string }[];
   };
-  await sql.query(
-    `insert into aq_model (id, generated_at, payload) values (1, $1, $2)
-     on conflict (id) do update set generated_at = excluded.generated_at, payload = excluded.payload`,
-    [aq.generated_at, JSON.stringify(aq.model)],
-  );
-  for (const station of aq.stations) {
-    await sql.query(
-      `insert into aq_forecast (station_id, generated_at, payload) values ($1, $2, $3)
-       on conflict (station_id) do update set generated_at = excluded.generated_at, payload = excluded.payload`,
-      [station.id, aq.generated_at, JSON.stringify(station)],
-    );
-  }
+  // Same rule as ml/aq_forecast.py: replace the whole run in one transaction.
+  await sql.transaction((tx) => [
+    tx.query('delete from aq_forecast'),
+    tx.query('insert into aq_forecast (id, generated_at, payload) values ($1, $2, $3)', [
+      '_model',
+      aq.generated_at,
+      JSON.stringify({ generated_at: aq.generated_at, model: aq.model }),
+    ]),
+    ...aq.stations.map((station) =>
+      tx.query('insert into aq_forecast (id, generated_at, payload) values ($1, $2, $3)', [
+        station.id,
+        aq.generated_at,
+        JSON.stringify(station),
+      ]),
+    ),
+  ]);
   console.log(`seeded aq_forecast: ${aq.stations.length} stations`);
 } else {
-  console.log('no src/data/aq_forecast.json yet: aq tables left as they are');
+  console.log('no src/data/aq_forecast.json yet: aq_forecast left as it is');
 }
