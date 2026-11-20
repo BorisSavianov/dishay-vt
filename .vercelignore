@@ -1,0 +1,11 @@
+# Only web/ is built on Vercel (Root Directory = web). Keep the upload small.
+# Every entry starts with / so it matches the repo root only: web/src/lib/ml must stay.
+/mobile
+/mobile-kit
+/ml
+/.venv
+/.superpowers
+/.claude
+/data
+/docs
+/pipeline

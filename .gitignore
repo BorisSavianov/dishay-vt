@@ -1,0 +1,22 @@
+data/raw/
+.venv/
+__pycache__/
+node_modules/
+.next/
+.vercel/
+dist/
+*.tsbuildinfo
+web/.env*
+!web/.env.example
+.DS_Store
+
+# secrets: never commit
+.env
+.env.*
+!.env.example
+
+# ML reports (metrics per training run)
+ml/reports/
+.pytest_cache/
+.vercel
+.env*

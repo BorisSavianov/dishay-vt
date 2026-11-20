@@ -1,0 +1,54 @@
+{
+ "meta": {
+  "source": "Eurostat demo_r_pjanaggr3, BG321 Veliko Tarnovo, population on 1 January",
+  "as_of": "2026-11-13",
+  "license": "Eurostat reuse policy: reuse with source acknowledged",
+  "generated_at": "2026-11-19T18:54:23+00:00"
+ },
+ "series": [
+  {
+   "year": 2015,
+   "value": 238456
+  },
+  {
+   "year": 2016,
+   "value": 233193
+  },
+  {
+   "year": 2017,
+   "value": 228077
+  },
+  {
+   "year": 2018,
+   "value": 222746
+  },
+  {
+   "year": 2019,
+   "value": 217496
+  },
+  {
+   "year": 2020,
+   "value": 212069
+  },
+  {
+   "year": 2021,
+   "value": 209158
+  },
+  {
+   "year": 2022,
+   "value": 206395
+  },
+  {
+   "year": 2023,
+   "value": 204033
+  },
+  {
+   "year": 2024,
+   "value": 202232
+  },
+  {
+   "year": 2025,
+   "value": 200413
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+import { typeLabel } from './facts';
+import { t } from './i18n';
+import type { Lang, Point, Region } from './types';
+
+export type PinDetails = {
+  title: string;
+  rows: { label: string; value: string }[];
+  website: string | null;
+};
+
+// OSM tags are volunteer-typed free text. Only http and https addresses ever become links.
+export function safeWebsite(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const text = raw.trim();
+  const value = /^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+// What a pin popup shows. Unnamed pins are titled by their type, so the popup is never empty.
+export function pinDetails(lang: Lang, p: Point): PinDetails {
+  const type = typeLabel(lang, p.type);
+  const rows: PinDetails['rows'] = [];
+  if (p.name) rows.push({ label: t(lang, 'pin.type'), value: type });
+  if (p.address) rows.push({ label: t(lang, 'pin.address'), value: p.address });
+  if (p.hours) rows.push({ label: t(lang, 'pin.hours'), value: p.hours });
+  if (p.phone) rows.push({ label: t(lang, 'pin.phone'), value: p.phone });
+  return { title: p.name ?? type, rows, website: safeWebsite(p.website) };
+}
+
+// The map note: says that every point is inside the boundary only when the pipeline's check found that.
+export function regionCaveat(lang: Lang, check: Region['check']): string {
+  return check.inside === check.points
+    ? t(lang, 'map.caveat', { total: check.points })
+    : t(lang, 'map.caveat.partial', { inside: check.inside, total: check.points });
+}
