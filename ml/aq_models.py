@@ -56,12 +56,15 @@ class Model:
             self.booster.save_model(str(path_stem.with_suffix(".json")))
 
     @staticmethod
-    def load(path_stem: Path, algo: str) -> "Model":
+    def load(path_stem: Path, algo: str, device: str = "cpu") -> "Model":
+        """XGBoost models are trained on CUDA but predict and explain on `device` (CPU by default, so inference
+        runs on a GitHub runner with no GPU)."""
         if algo == "lgbm":
             return Model("lgbm", lgb.Booster(model_file=str(path_stem.with_suffix(".txt"))))
         import xgboost as xgb
         b = xgb.Booster()
         b.load_model(str(path_stem.with_suffix(".json")))
+        b.set_param({"device": device})
         return Model("xgb", b)
 
 

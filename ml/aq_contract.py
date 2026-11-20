@@ -1,5 +1,7 @@
 """Checks a forecast payload against the contract (contract/CONTRACT.md "Air quality", mobile/src/aq/types.ts).
-Used by the tests and by ml.aq_forecast before anything is written."""
+Used by the tests and by ml.aq_forecast before anything is written.
+
+    uv run --group ml python -m ml.aq_contract forecast.json     # exit 1 if it fails"""
 from __future__ import annotations
 
 import datetime as dt
@@ -123,3 +125,20 @@ def validate(payload: dict) -> list[str]:
                 if not _shares_ok(d["sources"]):
                     errors.append(f"{p}.daily {d.get('date')}.sources: heating/traffic/regional/other in [0,1] summing to 1±0.01")
     return errors
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+
+    errs = []
+    for path in sys.argv[1:]:
+        with open(path, encoding="utf-8") as f:
+            payload = json.load(f)
+        found = validate(payload)
+        print(f"{path}: {len(payload.get('stations', []))} stations, generated_at {payload.get('generated_at')}, "
+              f"{'OK' if not found else f'{len(found)} errors'}")
+        errs += found
+    for e in errs[:20]:
+        print(f"  {e}")
+    sys.exit(1 if errs or len(sys.argv) < 2 else 0)
