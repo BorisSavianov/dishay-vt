@@ -1,9 +1,13 @@
 import type { Metadata } from 'next';
+import { EpisodeChart } from '@/components/aq/EpisodeChart';
+import { LevelChip } from '@/components/aq/Level';
 import { LineChart } from '@/components/aq/LineChart';
+import { dayBefore, readEpisode } from '@/lib/aq/episode';
+import { PM25_BANDS } from '@/lib/aq/levels';
 import { Kpi } from '@/components/Kpi';
 import { AppShell } from '@/components/shell/AppShell';
 import deaths from '@/data/pm25_deaths_bg_eu.json';
-import { fmtPm } from '@/lib/aq/format';
+import { dayLabel, fmtPm } from '@/lib/aq/format';
 import { loadForecast } from '@/lib/aq/load';
 import { air, type AirKey } from '@/lib/aq/strings';
 import type { AqMae } from '@/lib/aq/types';
@@ -46,6 +50,9 @@ export default async function Why({ searchParams }: { searchParams: SearchParams
   const bgLast = eurostat.bg[eurostat.bg.length - 1];
   const euSame = bgLast ? eurostat.eu.find((p) => p.year === bgLast.year) : undefined;
   const years = eurostat.bg.map((p) => p.year).filter((y) => eurostat.eu.some((p) => p.year === y));
+  const episode = readEpisode();
+  const ep1 = episode ? dayBefore(episode) : null;
+  const score = episode?.score;
 
   return (
     <AppShell lang={lang} active="why" title={tr('why.title')} lead={tr('why.lead')} updated={forecast.generated_at}>
@@ -192,6 +199,117 @@ export default async function Why({ searchParams }: { searchParams: SearchParams
             )}
           </div>
         </>
+      )}
+
+      {episode && ep1 && (
+        <div className="row-trend">
+          <section className="card" aria-labelledby="ep-title">
+            <h2 className="card-title" id="ep-title">
+              {tr('ep.title', { date: dayLabel(lang, episode.date, true) })}
+            </h2>
+            <p className="card-sub">
+              {tr('ep.sub', {
+                place: lang === 'en' && episode.place_en ? episode.place_en : episode.place,
+                sensors: episode.sensors,
+              })}
+            </p>
+            <EpisodeChart
+              observed={episode.observed}
+              forecast={ep1.hourly}
+              cams={episode.cams}
+              threshold={PM25_BANDS[1]}
+              alt={tr('ep.alt', { date: dayLabel(lang, episode.date, true) })}
+              format={pm}
+              labels={{
+                observed: tr('ep.observed'),
+                forecast: tr('ep.forecast'),
+                band: tr('ep.band'),
+                cams: tr('ep.cams'),
+                threshold: tr('ep.threshold'),
+              }}
+            />
+            <ul className="ep-days">
+              <li>
+                <LevelChip level={episode.observed_daily.level} lang={lang} />
+                {tr('ep.measured', {
+                  level: episode.observed_daily.level,
+                  pm10: pm(episode.observed_daily.pm10_mean),
+                  eu: episode.observed_daily.exceeds_eu_limit ? tr('ep.eu') : '',
+                })}
+              </li>
+              {[...episode.forecasts]
+                .sort((a, b) => b.days_before - a.days_before)
+                .map((f) => (
+                  <li key={f.issued}>
+                    <LevelChip level={f.daily.alert_level ?? f.daily.level} lang={lang} />
+                    {tr(f.days_before === 1 ? 'ep.ours1' : 'ep.ours', {
+                      days: f.days_before,
+                      level: f.daily.alert_level ?? f.daily.level,
+                      pm10: pm(f.daily.pm10_mean),
+                    })}
+                  </li>
+                ))}
+              <li>
+                <LevelChip level={episode.cams_daily.level} lang={lang} />
+                {tr('ep.camsday', { level: episode.cams_daily.level, pm10: pm(episode.cams_daily.pm10_mean) })}
+              </li>
+            </ul>
+            {episode.observed_daily.exceeds_eu_limit && !ep1.daily.exceeds_eu_limit && (
+              <p className="note ep-honest">
+                {tr('ep.honest', { ours: pm(ep1.daily.pm10_mean), real: pm(episode.observed_daily.pm10_mean) })}
+              </p>
+            )}
+          </section>
+
+          {score && (
+            <aside className="card insight" aria-labelledby="score-title">
+              <h2 className="card-title" id="score-title">
+                {tr('ep.score.title')}
+              </h2>
+              <p className="card-sub">{tr('ep.score.sub', { days: score.days, bad: score.bad_days })}</p>
+              <dl className="ep-score">
+                <div>
+                  <dt>{tr('why.f.model')}</dt>
+                  <dd>
+                    <strong>
+                      {score.model_alert.hits}/{score.bad_days}
+                    </strong>{' '}
+                    {tr('ep.score.hits')}
+                  </dd>
+                  <dd>
+                    <strong>{score.model_alert.false_alarms}</strong> {tr('ep.score.false')}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{tr('why.f.cams')}</dt>
+                  <dd>
+                    <strong>
+                      {score.cams.hits}/{score.bad_days}
+                    </strong>{' '}
+                    {tr('ep.score.hits')}
+                  </dd>
+                  <dd>
+                    <strong>{score.cams.false_alarms}</strong> {tr('ep.score.false')}
+                  </dd>
+                </div>
+              </dl>
+              <p className="insight-text">
+                {tr('ep.score.body', {
+                  ours: score.model_alert.hits,
+                  cams: score.cams.hits,
+                  bad: score.bad_days,
+                  oursFalse: score.model_alert.false_alarms,
+                  camsFalse: score.cams.false_alarms,
+                })}
+              </p>
+              {score.worst10 && (
+                <p className="note">
+                  {tr('ep.score.worst', { ours: score.worst10.model_warned, cams: score.worst10.cams_warned })}
+                </p>
+              )}
+            </aside>
+          )}
+        </div>
       )}
 
       <div className="row-split">

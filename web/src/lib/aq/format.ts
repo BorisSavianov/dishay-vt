@@ -30,9 +30,15 @@ export function clockLabel(lang: Lang, iso: string): string {
 }
 
 // "събота, 21 ноември" for a YYYY-MM-DD date.
-export function dayLabel(lang: Lang, date: string): string {
+export function dayLabel(lang: Lang, date: string, withYear = false): string {
   const [y, m, d] = date.split('-').map(Number) as [number, number, number];
-  return new Intl.DateTimeFormat(locale(lang), { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }).format(
+  return new Intl.DateTimeFormat(locale(lang), {
+    timeZone: 'UTC',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    ...(withYear ? { year: 'numeric' } : {}),
+  }).format(
     new Date(Date.UTC(y, m - 1, d, 12)),
   );
 }

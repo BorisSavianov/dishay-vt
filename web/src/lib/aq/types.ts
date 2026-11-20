@@ -49,15 +49,6 @@ export type AqModel = {
   mae_vt?: AqMae; // Veliko Tarnovo stations only, 24 h
   mae_by_horizon?: ({ h: number } & AqMae)[];
   importance?: { group: string; label_bg: string; label_en?: string; share: number }[];
-  // Web addition, not sent yet: one past smog day and the forecast issued 24–48 h before it.
-  episode?: {
-    station_id: string;
-    date: string;
-    issued_at: string;
-    observed: { t: string; pm10: number }[];
-    predicted: { t: string; pm10: number }[];
-    cams?: { t: string; pm10: number }[];
-  };
 };
 
 export type AqForecast = {
