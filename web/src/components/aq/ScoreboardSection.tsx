@@ -37,7 +37,7 @@ export function ScoreboardSection({ view, from, to, lang }: { view: ScoreboardVi
                     <span className="bar-track">
                       <span className="bar" style={{ width: `${Math.max(bar.share * 100, 2)}%` }} />
                     </span>
-                    <span>{pm(bar.value)}</span>
+                    <span data-count>{pm(bar.value)}</span>
                   </li>
                 ))}
               </ul>

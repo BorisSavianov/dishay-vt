@@ -7,11 +7,14 @@ import type { MessageKey } from '@/lib/i18n';
 import { withLang } from '@/lib/page';
 import type { Lang } from '@/lib/types';
 import { ExportMenu } from './ExportMenu';
+import { Backdrop } from './Backdrop';
 import { BrandMark, Icon, type IconName } from './Icon';
 import { DocLang, LangSwitch } from './LangSwitch';
+import { PageMotion } from './PageMotion';
 import { ThemeToggle } from './ThemeToggle';
+import type { NavId } from '@/lib/look';
 
-export type NavId = 'story' | 'dashboard' | 'geo' | 'why' | 'health' | 'ai' | 'predict' | 'sources' | 'about';
+export type { NavId };
 
 type NavItem = { id: NavId; href: string; label: MessageKey; tab?: MessageKey; icon: IconName };
 
@@ -79,6 +82,8 @@ export function AppShell({
 
   return (
     <div className="app">
+      <Backdrop active={active} />
+      <PageMotion />
       <DocLang lang={lang} />
       <a className="skip-link" href="#main">
         {tr('skip.link')}

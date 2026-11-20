@@ -13,9 +13,9 @@ function subscribe(onChange: () => void): () => void {
 }
 
 function read(): Theme {
-  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
 }
 
 export function useTheme(): Theme {
-  return useSyncExternalStore(subscribe, read, () => 'light' as Theme);
+  return useSyncExternalStore(subscribe, read, () => 'dark' as Theme);
 }
