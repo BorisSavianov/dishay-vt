@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { day } from '@/lib/tg/fixtures';
-import { dmy, showSources, sourceSegments, sourcesLine, whatIfLine } from './sources';
+import { dmy, lastWinterFallback, showSources, sourceSegments, sourcesLine, whatIfLine } from './sources';
 import type { AqWhatIf } from './types';
 
 const sources = { heating: 0.64, traffic: 0.08, regional: 0.15, other: 0.13 };
@@ -41,5 +41,23 @@ describe('source segments', () => {
     expect(sourceSegments(sources, 'bg').map((x) => x.key)).toEqual(['heating', 'traffic', 'regional', 'other']);
     expect(sourceSegments(sources, 'bg')[3]!.label).toBe('друго');
     expect(dmy('2025-10-01')).toBe('01.10.2025');
+  });
+});
+
+describe('last-winter fallback', () => {
+  const shares = { heating: 0.45, traffic: 0.03, regional: 0.25, other: 0.27 };
+  const withShares: AqWhatIf = { ...whatIf, last_winter: { ...lastWinter, shares } };
+  const clean = { ...day('2026-11-21', 1), pm25_mean: 2.2, sources };
+  const dirty = { ...day('2026-11-22', 3), pm25_mean: 18, sources };
+
+  it('gives last winter when no coming day shows its own shares', () => {
+    expect(lastWinterFallback([clean, { ...clean, date: '2026-11-22' }], withShares)?.shares).toEqual(shares);
+  });
+  it('stays out when a coming day already shows its shares', () => {
+    expect(lastWinterFallback([clean, dirty], withShares)).toBeNull();
+  });
+  it('is null without last-winter shares', () => {
+    expect(lastWinterFallback([clean], whatIf)).toBeNull();
+    expect(lastWinterFallback([clean], undefined)).toBeNull();
   });
 });
