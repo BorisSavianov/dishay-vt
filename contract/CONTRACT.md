@@ -105,3 +105,30 @@ The whole forecast: `{ generated_at, model, stations[] }`. Stations may leave ou
 One station with `hourly` (72 items). The app calls it only for the home station when the list has no `hourly`.
 
 Levels are EEA EAQI 1..6. Band edges live in `mobile/src/aq/levels.ts` (`PM25_BANDS`, `PM10_BANDS`); the web should use the same numbers.
+
+### Web implementation
+
+- Both routes return bare JSON (no `ok` wrapper) plus a `source` field: `"database"` (Neon), `"bundled"` (`web/src/data/aq_forecast.json`) or `"demo"` (invented numbers from the same generator as `mobile/src/aq/mock.ts`). A client must label `"demo"` as demo data. The same value is in the `X-Data-Source` header.
+- Unknown station: `404 { "ok": false, "error": { "code": "not_found", "message" } }`.
+- Headers: `Access-Control-Allow-Origin: *`; `Cache-Control: public, s-maxage=300, stale-while-revalidate=600` (errors: `no-store`).
+- The web copies of the types and levels are in `web/src/lib/aq/` (`types.ts`, `levels.ts`, `mock.ts`). Change the band edges in both places at once.
+- `GET /api/health` also returns `aq: { source, generated_at, model, stations }`.
+
+### Neon tables (`web/db/schema.sql`)
+
+`ml/aq_forecast.py` writes them every hour; the web only reads.
+
+| Table | Columns | Content |
+| --- | --- | --- |
+| `aq_forecast` | `station_id text primary key`, `generated_at timestamptz`, `payload jsonb` | One row per station; `payload` is the station object with `hourly` (72) and `daily` (3). |
+| `aq_model` | `id integer primary key` (always 1), `generated_at timestamptz`, `payload jsonb` | The `model` object. |
+
+Upsert with `on conflict (station_id) do update` and `on conflict (id) do update`. The web reads `generated_at` as the newest station row and drops station rows more than 6 hours older than it, so a station that leaves the run disappears. Without a row in `aq_model` the web falls back to the bundled file.
+
+### Optional model fields (web „Защо?“ page)
+
+All optional; the page hides a block whose field is missing.
+
+- `reasons[].label_en`: the English label of a reason.
+- `model.importances`: `[{ feature, label_bg, label_en?, value }]`, global feature importance, largest first.
+- `model.episode`: `{ station_id, date, issued_at, observed: [{ t, pm10 }], predicted: [{ t, pm10 }], cams?: [{ t, pm10 }] }`, one past smog day and the forecast issued 24–48 h before it.

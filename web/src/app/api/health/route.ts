@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSql } from '@/lib/db';
 import { bundled, loadDatasets } from '@/lib/data';
 import { loadModel, modelRef } from '@/lib/ml/model';
+import { loadForecast } from '@/lib/aq/load';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,7 @@ export async function GET() {
   }
   const { source } = await loadDatasets();
   const model = loadModel();
+  const aq = await loadForecast();
   const body = {
     ok: true,
     database,
@@ -31,6 +33,7 @@ export async function GET() {
       mockOnly: process.env.MOCK_LLM === '1',
     },
     model: model ? modelRef(model) : null,
+    aq: { source: aq.source, generated_at: aq.forecast.generated_at, model: aq.forecast.model.name, stations: aq.forecast.stations.length },
   };
   return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store' } });
 }
