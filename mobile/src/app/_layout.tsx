@@ -3,6 +3,8 @@ import { Tabs } from 'expo-router/js-tabs';
 import type { ReactNode } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AirProvider } from '../aq/store';
+import { air } from '../aq/strings';
 import { Icon, type IconName } from '../components/Icon';
 import { ColorModeProvider, useColorMode, useColors } from '../lib/color-mode';
 import { LangProvider, useLang } from '../lib/lang';
@@ -14,9 +16,11 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <LangProvider>
           <ColorModeProvider>
-            <AppTheme>
-              <TabBar />
-            </AppTheme>
+            <AirProvider>
+              <AppTheme>
+                <TabBar />
+              </AppTheme>
+            </AirProvider>
           </ColorModeProvider>
         </LangProvider>
       </SafeAreaProvider>
@@ -30,8 +34,8 @@ function AppTheme({ children }: { children: ReactNode }) {
   return <ThemeProvider value={mode === 'dark' ? DarkTheme : DefaultTheme}>{children}</ThemeProvider>;
 }
 
-const TABS: { name: string; label: MessageKey; icon: IconName }[] = [
-  { name: 'index', label: 'tab.dashboard', icon: 'home' },
+const TABS: { name: string; label: MessageKey | 'air'; icon: IconName }[] = [
+  { name: 'index', label: 'air', icon: 'activity' },
   { name: 'map', label: 'tab.map', icon: 'map' },
   { name: 'health', label: 'tab.health', icon: 'heart' },
   { name: 'insights', label: 'tab.ai', icon: 'sparkle' },
@@ -59,12 +63,14 @@ function TabBar() {
           key={tab.name}
           name={tab.name}
           options={{
-            title: t(lang, tab.label),
+            title: tab.label === 'air' ? air(lang, 'tab.air') : t(lang, tab.label),
             tabBarIcon: ({ color }) => <Icon name={tab.icon} color={color} />,
           }}
         />
       ))}
-      {/* Opened from the Data tab, so it has no tab of its own. */}
+      {/* Routes without a tab: the profile picker (from the Air tab), the old overview and Prediction (from Data). */}
+      <Tabs.Screen name="profile" options={{ title: air(lang, 'air.profile.edit'), tabBarItemStyle: { display: 'none' } }} />
+      <Tabs.Screen name="overview" options={{ title: t(lang, 'tab.dashboard'), tabBarItemStyle: { display: 'none' } }} />
       <Tabs.Screen
         name="predict"
         options={{ title: t(lang, 'nav.predict'), tabBarItemStyle: { display: 'none' } }}

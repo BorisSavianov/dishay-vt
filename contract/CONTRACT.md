@@ -91,3 +91,17 @@ Also returns `model: { name, version, kind, algorithm, unit }`, or `null` when n
 ### Changing the model
 
 Train, commit `web/src/model/model.json`, deploy. The routes and the clients do not change. Only screens that hard-code feature names need updating; screens built from `features` adapt on their own.
+
+## Air quality (forecast)
+
+Shape and rules: `docs/hackathon-plan.md` ("Shared contract"). The mobile types are in `mobile/src/aq/types.ts`.
+
+### `GET /api/aq`
+
+The whole forecast: `{ generated_at, model, stations[] }`. Stations may leave out `hourly` to keep the response small; `daily` (3 days) and `latest` are always present. `404` or an error makes the app fall back to its labelled demo data.
+
+### `GET /api/aq/<station id>`
+
+One station with `hourly` (72 items). The app calls it only for the home station when the list has no `hourly`.
+
+Levels are EEA EAQI 1..6. Band edges live in `mobile/src/aq/levels.ts` (`PM25_BANDS`, `PM10_BANDS`); the web should use the same numbers.

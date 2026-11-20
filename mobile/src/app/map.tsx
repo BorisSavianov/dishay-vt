@@ -1,3 +1,7 @@
+import { router } from 'expo-router';
+import { useAir } from '../aq/store';
+import { air } from '../aq/strings';
+import { AirMap } from '../components/AirMap';
 import { Card, CardTitle, Note } from '../components/Card';
 import { LiveMap } from '../components/LiveMap';
 import { Screen } from '../components/Screen';
@@ -14,6 +18,7 @@ export default function MapScreen() {
   const { lang } = useLang();
   const tr = (key: MessageKey, vars?: Record<string, string | number>) => t(lang, key, vars);
   const { facilities } = bundled;
+  const { forecast, home, setPrefs } = useAir();
   const types = orderTypes(Object.keys(facilities.counts)).map((type) => ({
     type,
     label: typeLabel(lang, type),
@@ -22,6 +27,22 @@ export default function MapScreen() {
 
   return (
     <Screen title={tr('nav.geo')} lead={tr('geo.lead')} updated={updatedAt(bundled)}>
+      {forecast ? (
+        <Card>
+          <CardTitle title={air(lang, 'air.map.title')} sub={air(lang, 'air.map.lead')} />
+          <AirMap
+            stations={forecast.stations}
+            homeId={home?.id ?? null}
+            lang={lang}
+            onPick={(s) => {
+              setPrefs({ stationId: s.id });
+              router.navigate('/');
+            }}
+          />
+          <Note>{air(lang, 'air.source')}</Note>
+        </Card>
+      ) : null}
+
       <Card>
         <CardTitle title={tr('map.title')} />
         <LiveMap

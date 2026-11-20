@@ -1,170 +1,214 @@
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Card, CardTitle, Kpi, Note } from '../components/Card';
-import { Donut } from '../components/Donut';
+import { useEffect, useMemo } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { testAlert } from '../aq/alerts';
+import { bestWindow, clampLevel, LEVEL_COLORS, levelNow, levelTextColor, localDate, type Level } from '../aq/levels';
+import { useAir } from '../aq/store';
+import { advice, air, levelName, profileName } from '../aq/strings';
+import { Card, CardTitle, Note } from '../components/Card';
+import { ForecastChart } from '../components/ForecastChart';
 import { Icon } from '../components/Icon';
-import { LiveMap } from '../components/LiveMap';
 import { Screen } from '../components/Screen';
-import { SourceLine } from '../components/SourceLine';
-import { TrendChart } from '../components/TrendChart';
 import { useColors } from '../lib/color-mode';
-import { bundled, bundledRegion } from '../lib/data';
-import { orderTypes } from '../lib/facility-types';
 import { useLang } from '../lib/lang';
-import { ui } from '../lib/ui-strings';
-import { typeLabel } from '../shared/facts';
-import { changePct, fmtInt, fmtNum, fmtPct } from '../shared/format';
-import { t, type MessageKey } from '../shared/i18n';
-import { insightText } from '../shared/insight';
-import { regionCaveat } from '../shared/pin';
-import { cagr, span, splitFacilities, updatedAt } from '../shared/metrics';
+import type { Lang } from '../shared/types';
 
-export default function Dashboard() {
+function hhmm(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function dayLabel(lang: Lang, date: string, now: Date): string {
+  if (date === localDate(now)) return air(lang, 'day.today');
+  if (date === localDate(new Date(now.getTime() + 86400_000))) return air(lang, 'day.tomorrow');
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  return new Date(y, m - 1, d).toLocaleDateString(lang === 'bg' ? 'bg-BG' : 'en-GB', { weekday: 'long' });
+}
+
+// The home tab: the home station's air now, the 72-hour forecast, the next days with reasons,
+// the cleanest window today and the alert switch.
+export default function AirScreen() {
   const { lang } = useLang();
   const c = useColors();
-  const tr = (key: MessageKey, vars?: Record<string, string | number>) => t(lang, key, vars);
+  const { forecast, source, loading, home, prefs, refresh, alerts, enableAlerts } = useAir();
+  const now = new Date();
 
-  const pop = bundled.population.series;
-  const popSpan = span(pop);
-  const phys = bundled.physicians.series[bundled.physicians.series.length - 1];
-  const split = splitFacilities(bundled.facilities.counts);
-  const insight = insightText(lang, pop);
-  const pct = popSpan ? changePct(popSpan.first.value, popSpan.last.value) : null;
-  const mapTypes = orderTypes(Object.keys(bundled.facilities.counts)).map((type) => ({
-    type,
-    label: typeLabel(lang, type),
-    count: bundled.facilities.counts[type] ?? 0,
-  }));
-  const rate = popSpan ? cagr(popSpan.first.value, popSpan.last.value, popSpan.years) : null;
+  // First launch: pick a profile and station.
+  useEffect(() => {
+    if (forecast && !prefs.onboarded) router.navigate('/profile');
+  }, [forecast, prefs.onboarded]);
+
+  const current = home ? levelNow(home, now) : null;
+  const best = useMemo(() => (home?.hourly ? bestWindow(home.hourly, new Date()) : null), [home]);
+
+  if (!forecast || !home) {
+    return (
+      <Screen title={air(lang, 'air.title')} lead={air(lang, 'air.lead')}>
+        <ActivityIndicator color={c.accent} style={{ marginTop: 40 }} />
+      </Screen>
+    );
+  }
+
+  const level: Level | null = current?.level ?? null;
 
   return (
-    <Screen title={tr('dash.title')} lead={tr('site.lead')} updated={updatedAt(bundled)}>
-      <View style={styles.kpis}>
-        {popSpan && pct !== null && (
-          <Kpi
-            primary
-            icon="users"
-            label={tr('kpi.population.label', { year: popSpan.last.year })}
-            value={fmtInt(lang, popSpan.last.value)}
-            delta={{ text: fmtPct(lang, pct), negative: pct < 0 }}
-            sub={tr('kpi.population.vs', { year: popSpan.first.year })}
-          />
-        )}
-        {popSpan && rate !== null && (
-          <Kpi
-            icon={rate < 0 ? 'trendDown' : 'trendUp'}
-            label={tr('kpi.change.label')}
-            value={fmtPct(lang, rate, 2)}
-            sub={tr('kpi.change.sub', { first: popSpan.first.year, last: popSpan.last.year })}
-          />
-        )}
-        {phys && (
-          <Kpi
-            icon="activity"
-            label={tr('kpi.physicians.label')}
-            value={fmtNum(lang, phys.value, 2)}
-            sub={tr('kpi.physicians.sub', { year: phys.year })}
-          />
-        )}
-        <Kpi
-          icon="building"
-          label={tr('kpi.facilities.label')}
-          value={fmtInt(lang, split.healthTotal)}
-          sub={tr('kpi.facilities.sub', { count: fmtInt(lang, split.busStops) })}
-        />
+    <Screen title={air(lang, 'air.title')} lead={air(lang, 'air.lead')}>
+      {source === 'demo' ? (
+        <Pressable
+          onPress={refresh}
+          accessibilityRole="button"
+          style={[styles.banner, { backgroundColor: c.negSoft, borderColor: c.line }]}
+        >
+          <Text style={[styles.bannerText, { color: c.warn }]}>{air(lang, 'air.demo')}</Text>
+          {loading ? <ActivityIndicator color={c.warn} /> : <Icon name="refresh" color={c.warn} size={18} />}
+        </Pressable>
+      ) : (
+        <Text style={[styles.live, { color: c.muted }]}>{air(lang, 'air.live', { time: hhmm(forecast.generated_at) })}</Text>
+      )}
+
+      {/* The headline card: level colour, number, advice for this profile. */}
+      <View
+        style={[styles.hero, { backgroundColor: level ? LEVEL_COLORS[level] : c.card2 }]}
+        accessible
+        accessibilityLabel={
+          level && current
+            ? `${home.name}: ${levelName(lang, level)}, PM2.5 ${Math.round(current.pm25)}. ${advice(lang, prefs.profile, level)}`
+            : home.name
+        }
+      >
+        <Pressable onPress={() => router.navigate('/profile')} style={styles.heroTop} accessibilityRole="button">
+          <Text style={[styles.heroPlace, { color: level ? levelTextColor(level) : c.fg }]} numberOfLines={1}>
+            {home.name}
+          </Text>
+          <Text style={[styles.heroChange, { color: level ? levelTextColor(level) : c.fg }]}>
+            {profileName(lang, prefs.profile)} · {air(lang, 'air.change')}
+          </Text>
+        </Pressable>
+        {level && current ? (
+          <>
+            <Text style={[styles.heroLevel, { color: levelTextColor(level) }]}>{levelName(lang, level)}</Text>
+            <View style={styles.heroNums}>
+              <Text style={[styles.heroNum, { color: levelTextColor(level) }]}>{Math.round(current.pm25)}</Text>
+              <Text style={[styles.heroUnit, { color: levelTextColor(level) }]}>
+                µg/m³ PM2.5{'\n'}
+                {air(lang, current.measured ? 'air.now.measured' : 'air.now.forecast')}
+              </Text>
+            </View>
+            <Text style={[styles.heroAdvice, { color: levelTextColor(level) }]}>{advice(lang, prefs.profile, level)}</Text>
+          </>
+        ) : null}
       </View>
 
       <Card>
-        <CardTitle title={tr('trend.title')} sub={tr('trend.sub')} />
-        <TrendChart
-          series={pop}
-          lang={lang}
-          labels={{
-            type: tr('trend.type'),
-            line: tr('trend.line'),
-            area: tr('trend.area'),
-            bar: tr('trend.bar'),
-            alt: popSpan
-              ? tr('trend.alt', { title: tr('trend.title'), first: popSpan.first.year, last: popSpan.last.year })
-              : tr('trend.title'),
-            hint: ui(lang, 'chart.hint'),
-            readout: tr('trend.readout', { label: tr('trend.title') }),
-          }}
-        />
-        <SourceLine meta={bundled.population.meta} asOf={tr('sources.asof')} licence={tr('sources.license')} />
+        <CardTitle title={air(lang, 'air.best.title')} />
+        <Text style={[styles.best, { color: c.fg }]}>
+          {best
+            ? air(lang, 'air.best.body', { start: hhmm(best.start), end: hhmm(best.end), pm: Math.round(best.pm25) })
+            : air(lang, 'air.best.none')}
+        </Text>
       </Card>
 
-      <Card soft>
-        <View style={styles.insightTitle}>
-          <Icon name="sparkle" color={c.accent} />
-          <CardTitle title={tr('insight.title')} />
+      {home.hourly?.length ? (
+        <Card>
+          <CardTitle title={air(lang, 'air.chart.title')} sub={air(lang, 'air.chart.sub')} />
+          <ForecastChart
+            hourly={home.hourly}
+            lang={lang}
+            labels={{ ours: air(lang, 'air.chart.ours'), cams: air(lang, 'air.chart.cams') }}
+          />
+        </Card>
+      ) : null}
+
+      <Card>
+        <CardTitle title={air(lang, 'air.days.title')} />
+        <View style={{ gap: 10 }}>
+          {home.daily.map((d) => {
+            const lv = clampLevel(d.level);
+            return (
+              <View key={d.date} style={[styles.day, { borderColor: c.line, backgroundColor: c.card2 }]}>
+                <View style={styles.dayHead}>
+                  <View style={[styles.dayBadge, { backgroundColor: LEVEL_COLORS[lv] }]}>
+                    <Text style={[styles.dayBadgeText, { color: levelTextColor(lv) }]}>{levelName(lang, lv)}</Text>
+                  </View>
+                  <Text style={[styles.dayName, { color: c.fg }]}>{dayLabel(lang, d.date, now)}</Text>
+                  <Text style={[styles.dayPm, { color: c.muted }]}>PM10 {Math.round(d.pm10_mean)}</Text>
+                </View>
+                {d.exceeds_eu_limit ? <Text style={[styles.eu, { color: c.neg }]}>⚠ {air(lang, 'air.eu')}</Text> : null}
+                {d.reasons.length ? (
+                  <Text style={[styles.why, { color: c.muted }]}>
+                    {air(lang, 'air.days.why')}:{' '}
+                    {d.reasons
+                      .slice(0, 3)
+                      .map((r) => (lang === 'en' && r.label_en ? r.label_en : r.label_bg))
+                      .join(' · ')}
+                  </Text>
+                ) : null}
+              </View>
+            );
+          })}
         </View>
-        {insight ? <Text style={[styles.insight, { color: c.fg }]}>{insight}</Text> : null}
+      </Card>
+
+      <Card>
+        <CardTitle title={air(lang, 'air.alerts.title')} />
+        <Text style={[styles.best, { color: c.fg }]}>
+          {alerts.allowed
+            ? alerts.scheduled
+              ? air(lang, 'air.alerts.on', { count: alerts.scheduled })
+              : air(lang, 'air.alerts.none')
+            : air(lang, 'air.alerts.off')}
+        </Text>
+        {!alerts.allowed ? (
+          <Pressable onPress={enableAlerts} accessibilityRole="button" style={[styles.button, { backgroundColor: c.accent }]}>
+            <Text style={[styles.buttonText, { color: c.onAccent }]}>{air(lang, 'air.alerts.enable')}</Text>
+          </Pressable>
+        ) : null}
         <Pressable
-          onPress={() => router.navigate('/insights')}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.cta, { backgroundColor: c.card, borderColor: c.line }, pressed && { opacity: 0.7 }]}
-        >
-          <Text style={[styles.ctaText, { color: c.fg }]}>{tr('insight.cta')}</Text>
-          <Icon name="arrow" color={c.fg} size={20} />
-        </Pressable>
-      </Card>
-
-      <Card>
-        <CardTitle title={tr('donut.title')} />
-        <Donut
-          lang={lang}
-          total={split.healthTotal}
-          totalLabel={tr('donut.total')}
-          alt={tr('donut.title')}
-          parts={split.health.map((h) => ({ ...h, label: typeLabel(lang, h.type) }))}
-        />
-        <Note>{tr('donut.note', { count: fmtInt(lang, split.busStops) })}</Note>
-        <SourceLine meta={bundled.facilities.meta} asOf={tr('sources.asof')} licence={tr('sources.license')} />
-      </Card>
-
-      <Card>
-        <CardTitle title={tr('map.title')} />
-        <LiveMap
-          preview
-          onOpen={() => router.navigate('/map')}
-          points={bundled.facilities.points}
-          types={mapTypes}
-          region={bundledRegion.geometry}
-          lang={lang}
-          labels={{
-            alt: tr('map.alt'),
-            typeHeading: tr('map.type'),
-            shownLabel: tr('map.count'),
-            fallback: tr('map.fallback'),
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            void testAlert(lang, home, prefs.profile);
           }}
-        />
-        <Pressable
-          onPress={() => router.navigate('/map')}
           accessibilityRole="button"
-          style={({ pressed }) => [styles.cta, { backgroundColor: c.card, borderColor: c.line }, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.button, styles.ghost, { borderColor: c.line, backgroundColor: c.card }, pressed && { opacity: 0.7 }]}
         >
-          <Text style={[styles.ctaText, { color: c.fg }]}>{tr('dash.map.open')}</Text>
-          <Icon name="arrow" color={c.fg} size={20} />
+          <Text style={[styles.buttonText, { color: c.fg }]}>{air(lang, 'air.alerts.test')}</Text>
         </Pressable>
-        <Note>{regionCaveat(lang, bundledRegion.check)}</Note>
+        <Pressable onPress={() => router.navigate('/profile')} accessibilityRole="button" style={styles.link}>
+          <Text style={[styles.linkText, { color: c.accent }]}>{air(lang, 'air.profile.edit')} →</Text>
+        </Pressable>
       </Card>
+
+      <Note>{air(lang, 'air.source')}</Note>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  insightTitle: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  insight: { fontSize: 16.5, lineHeight: 25 },
-  cta: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  ctaText: { fontSize: 15, fontWeight: '700' },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1 },
+  bannerText: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  live: { fontSize: 13, fontWeight: '600' },
+  hero: { borderRadius: 26, padding: 20, gap: 6 },
+  heroTop: { gap: 2 },
+  heroPlace: { fontSize: 16, fontWeight: '700' },
+  heroChange: { fontSize: 12.5, fontWeight: '600', opacity: 0.85 },
+  heroLevel: { fontSize: 30, fontWeight: '800', marginTop: 8, letterSpacing: -0.6 },
+  heroNums: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  heroNum: { fontSize: 64, fontWeight: '800', letterSpacing: -2, lineHeight: 68 },
+  heroUnit: { fontSize: 13, fontWeight: '600', marginBottom: 10, opacity: 0.9 },
+  heroAdvice: { fontSize: 16, fontWeight: '600', lineHeight: 22, marginTop: 4 },
+  best: { fontSize: 16, lineHeight: 22 },
+  day: { gap: 6, padding: 12, borderRadius: 16, borderWidth: 1 },
+  dayHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dayBadge: { borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
+  dayBadgeText: { fontSize: 12.5, fontWeight: '800' },
+  dayName: { flex: 1, fontSize: 15, fontWeight: '700', textTransform: 'capitalize' },
+  dayPm: { fontSize: 13, fontWeight: '600' },
+  eu: { fontSize: 13, fontWeight: '700' },
+  why: { fontSize: 13, lineHeight: 18 },
+  button: { minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  ghost: { borderWidth: 1 },
+  buttonText: { fontSize: 15, fontWeight: '700' },
+  link: { minHeight: 36, justifyContent: 'center' },
+  linkText: { fontSize: 15, fontWeight: '700' },
 });
