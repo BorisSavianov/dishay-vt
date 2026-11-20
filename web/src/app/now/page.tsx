@@ -4,6 +4,7 @@ import { DayCards } from '@/components/aq/DayCards';
 import { ExplainCard } from '@/components/aq/ExplainCard';
 import { ForecastChart } from '@/components/aq/ForecastChart';
 import { LevelChip } from '@/components/aq/Level';
+import { NowSky } from '@/components/aq/NowSky';
 import { StationPicker } from '@/components/aq/StationPicker';
 import { AppShell } from '@/components/shell/AppShell';
 import { Icon } from '@/components/shell/Icon';
@@ -37,6 +38,8 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
   const today = sofiaDate(now);
   const tomorrow = sofiaDate(new Date(now.getTime() + 24 * 3600_000));
   const current = levelNow(station, now);
+  // The valley behind the top cards is Veliko Tarnovo, so its haze is VT's air whatever station is picked.
+  const vtLevel = levelNow(featuredStation(forecast), now)?.level ?? null;
   const hourly = (station.hourly ?? []).filter((h) => new Date(h.t).getTime() >= now.getTime() - 3600_000);
   const days = station.daily.filter((d) => d.date >= today).slice(0, 3);
   const m = forecast.model;
@@ -69,61 +72,64 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
         </p>
       )}
 
-      <div className="air-top">
-        <section className="card air-now" aria-labelledby="now-title">
-          <div className="card-head">
-            <div>
-              <p className="eyebrow">{station.city}</p>
-              <h2 className="card-title" id="now-title">
-                {station.name}
-              </h2>
+      <div className="now-hero">
+        <NowSky level={vtLevel} />
+        <div className="air-top">
+          <section className="card air-now" aria-labelledby="now-title">
+            <div className="card-head">
+              <div>
+                <p className="eyebrow">{station.city}</p>
+                <h2 className="card-title" id="now-title">
+                  {station.name}
+                </h2>
+              </div>
+              <span className="pill">{tr('web.generated', { time: hourLabel(lang, forecast.generated_at) })}</span>
             </div>
-            <span className="pill">{tr('web.generated', { time: hourLabel(lang, forecast.generated_at) })}</span>
-          </div>
-          {current ? (
-            <>
-              <LevelChip big level={current.level} lang={lang} />
-              <p className="air-now-pm">
-                {tr('web.now.pm', { pm25: fmtPm(lang, current.pm25), pm10: fmtPm(lang, current.pm10) })}
-                <span> · {current.measured ? tr('air.now.measured') : tr('air.now.forecast')}</span>
-              </p>
-              <p className="air-advice">
-                <strong>{profileName(lang, profile)}:</strong> {advice(lang, profile, current.level)}
-              </p>
-            </>
-          ) : (
-            <p className="air-now-pm">{tr('web.now.none')}</p>
-          )}
+            {current ? (
+              <>
+                <LevelChip big level={current.level} lang={lang} />
+                <p className="air-now-pm">
+                  {tr('web.now.pm', { pm25: fmtPm(lang, current.pm25), pm10: fmtPm(lang, current.pm10) })}
+                  <span> · {current.measured ? tr('air.now.measured') : tr('air.now.forecast')}</span>
+                </p>
+                <p className="air-advice">
+                  <strong>{profileName(lang, profile)}:</strong> {advice(lang, profile, current.level)}
+                </p>
+              </>
+            ) : (
+              <p className="air-now-pm">{tr('web.now.none')}</p>
+            )}
 
-          <StationPicker stations={forecast.stations} station={station.id} profile={profile} lang={lang} action="/now" />
-        </section>
+            <StationPicker stations={forecast.stations} station={station.id} profile={profile} lang={lang} action="/now" />
+          </section>
 
-        <aside className="card insight air-model" aria-labelledby="model-title">
-          <h2 className="card-title" id="model-title">
-            <Icon name="sparkle" />
-            {tr('web.model.title')}
-          </h2>
-          <p className="insight-text">
-            {!modelReady
-              ? tr('web.model.pending')
-              : season && vtSeason
-                ? tr('web.model.season', {
-                    from: short(season.from),
-                    to: short(season.to),
-                    model: fmtPm(lang, vtSeason.model),
-                    cams: fmtPm(lang, vtSeason.cams),
-                  })
-                : tr('web.model.vt', {
-                    model: fmtPm(lang, vtWinter.model),
-                    cams: fmtPm(lang, vtWinter.cams),
-                    persistence: fmtPm(lang, vtWinter.persistence),
-                  })}
-          </p>
-          <Link className="btn insight-cta" href={withLang('/why', lang)}>
-            {tr('web.model.cta')}
-            <Icon name="arrow" />
-          </Link>
-        </aside>
+          <aside className="card insight air-model" aria-labelledby="model-title">
+            <h2 className="card-title" id="model-title">
+              <Icon name="sparkle" />
+              {tr('web.model.title')}
+            </h2>
+            <p className="insight-text">
+              {!modelReady
+                ? tr('web.model.pending')
+                : season && vtSeason
+                  ? tr('web.model.season', {
+                      from: short(season.from),
+                      to: short(season.to),
+                      model: fmtPm(lang, vtSeason.model),
+                      cams: fmtPm(lang, vtSeason.cams),
+                    })
+                  : tr('web.model.vt', {
+                      model: fmtPm(lang, vtWinter.model),
+                      cams: fmtPm(lang, vtWinter.cams),
+                      persistence: fmtPm(lang, vtWinter.persistence),
+                    })}
+            </p>
+            <Link className="btn insight-cta" href={withLang('/why', lang)}>
+              {tr('web.model.cta')}
+              <Icon name="arrow" />
+            </Link>
+          </aside>
+        </div>
       </div>
 
       {hourly.length > 1 && (
