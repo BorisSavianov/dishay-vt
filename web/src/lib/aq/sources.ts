@@ -21,6 +21,16 @@ export function showSources(day: AqDay): day is AqDay & { sources: AqSources } {
   return day.sources !== undefined && day.pm25_mean >= 5;
 }
 
+type LastWinter = NonNullable<AqWhatIf['last_winter']> & { shares: AqSources };
+
+// On clean days the day cards hide their shares; then the dashboard shows last winter's instead,
+// so „Кой замърсява?“ is never missing from it. Null when a coming day already shows its own.
+export function lastWinterFallback(days: AqDay[], w: AqWhatIf | undefined): LastWinter | null {
+  const lw = w?.last_winter;
+  if (!lw?.shares || days.some(showSources)) return null;
+  return lw as LastWinter;
+}
+
 // What changing the heating would do. Below 0.5 µg/m³ the evening effect is shown as nothing, never as „−0“: on a
 // clean week only the last-winter clause is left. Null when there is nothing honest to say.
 export function whatIfLine(w: AqWhatIf, lang: Lang): string | null {

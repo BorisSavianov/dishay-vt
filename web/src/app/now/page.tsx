@@ -9,7 +9,8 @@ import { AppShell } from '@/components/shell/AppShell';
 import { Icon } from '@/components/shell/Icon';
 import { clockLabel, fmtPm, hourLabel, sofiaDate } from '@/lib/aq/format';
 import { levelNow, PROFILES, type Profile } from '@/lib/aq/levels';
-import { whatIfLine } from '@/lib/aq/sources';
+import { SourceBar } from '@/components/aq/SourceBar';
+import { dmy, lastWinterFallback, whatIfLine } from '@/lib/aq/sources';
 import { t } from '@/lib/i18n';
 import { featuredStation, loadForecast } from '@/lib/aq/load';
 import { advice, air, profileName, type AirKey } from '@/lib/aq/strings';
@@ -45,6 +46,8 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
   const vtSeason = season?.mae_pm25_next_day.vt;
   const vtWinter = m.mae_vt ?? m.mae;
   const whatIf = station.daily.some((d) => d.sources) && m.sources_what_if ? whatIfLine(m.sources_what_if, lang) : null;
+  // Clean coming days hide their own shares: show last winter's so „Кой замърсява?“ is always on the page.
+  const lastWinter = lastWinterFallback(days, m.sources_what_if);
   const short = (d: string) => `${Number(d.slice(8, 10))}.${Number(d.slice(5, 7))}`;
 
   return (
@@ -150,7 +153,22 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
       )}
 
       {days.length > 0 && <DayCards days={days} lang={lang} today={today} tomorrow={tomorrow} />}
-      {whatIf && <p className="note what-if">{whatIf}</p>}
+      {lastWinter ? (
+        <section className="card" aria-labelledby="src-title">
+          <h2 className="card-title" id="src-title">
+            {tr('src.season.title')}
+          </h2>
+          <p className="card-sub">
+            {lastWinter.from && lastWinter.to
+              ? tr('src.season.sub', { from: dmy(lastWinter.from), to: dmy(lastWinter.to) })
+              : tr('src.season.sub.plain')}
+          </p>
+          <SourceBar sources={lastWinter.shares} lang={lang} />
+          {whatIf && <p className="insight-text what-if">{whatIf}</p>}
+        </section>
+      ) : (
+        whatIf && <p className="note what-if">{whatIf}</p>
+      )}
 
       <ExplainCard
         station={station.id}
