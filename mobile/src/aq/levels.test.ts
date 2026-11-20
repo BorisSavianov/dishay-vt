@@ -29,7 +29,12 @@ describe('demoForecast', () => {
     for (const s of f.stations) {
       assert.equal(s.hourly?.length, 72);
       assert.equal(s.daily.length, 3);
+      assert.deepEqual(
+        s.daily.map((d) => d.date),
+        ['2026-11-21', '2026-11-22', '2026-11-23'],
+      );
     }
+    assert.equal(f.model.kind, 'mock');
   });
 });
 

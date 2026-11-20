@@ -2,6 +2,8 @@
 // and says so (source 'demo'), so the app never shows invented numbers as real.
 import { API_BASE } from '../lib/api';
 import { demoForecast } from './mock';
+import type { Lang } from '../shared/types';
+import type { Profile } from './levels';
 import type { AqForecast, AqSource, AqStation } from './types';
 
 const TIMEOUT_MS = 10_000;
@@ -40,8 +42,33 @@ export async function fetchForecast(needHourly: string[] = []): Promise<{ data: 
           }
         }),
     );
-    return { data, source: 'live' };
+    // The API also serves invented numbers (mock model or no forecast at all): label them as demo.
+    const demo = data.source === 'demo' || data.model.kind === 'mock';
+    return { data, source: demo ? 'demo' : 'live' };
   } catch (e) {
     return { data: demoForecast(), source: 'demo', error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export type Explanation = { text: string; provider: 'groq' | 'gemini' | 'mock'; cached: boolean };
+
+// A short explanation of one station's forecast for one group (web /api/aq/explain). The server checks the AI's
+// answer against the forecast numbers and returns the plain facts when no AI answers, so this only fails offline.
+export async function fetchExplain(station: string, profile: Profile, lang: Lang): Promise<Explanation> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const res = await fetch(`${API_BASE}/api/aq/explain`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({ station, profile, lang }),
+    });
+    if (!res.ok) throw new Error(`/api/aq/explain ${res.status}`);
+    const data = (await res.json()) as Partial<Explanation>;
+    if (typeof data.text !== 'string' || !data.text) throw new Error('/api/aq/explain: no text');
+    return { text: data.text, provider: data.provider ?? 'mock', cached: !!data.cached };
+  } finally {
+    clearTimeout(timer);
   }
 }

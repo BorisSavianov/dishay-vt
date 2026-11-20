@@ -10,7 +10,7 @@ import { BrandMark, Icon, type IconName } from './Icon';
 import { DocLang, LangSwitch } from './LangSwitch';
 import { ThemeToggle } from './ThemeToggle';
 
-export type NavId = 'dashboard' | 'geo' | 'health' | 'ai' | 'predict' | 'sources' | 'about';
+export type NavId = 'dashboard' | 'geo' | 'why' | 'health' | 'ai' | 'predict' | 'sources' | 'about';
 
 type NavItem = { id: NavId; href: string; label: MessageKey; tab?: MessageKey; icon: IconName };
 
@@ -20,9 +20,8 @@ const GROUPS: { label: MessageKey; items: NavItem[] }[] = [
     items: [
       { id: 'dashboard', href: '/', label: 'nav.dashboard', tab: 'tab.dashboard', icon: 'home' },
       { id: 'geo', href: '/geographic', label: 'nav.geo', tab: 'tab.map', icon: 'map' },
-      { id: 'health', href: '/health', label: 'nav.health', tab: 'tab.health', icon: 'heart' },
+      { id: 'why', href: '/why', label: 'nav.why', icon: 'trendDown' },
       { id: 'ai', href: '/insights', label: 'nav.ai', tab: 'tab.ai', icon: 'sparkle' },
-      { id: 'predict', href: '/predict', label: 'nav.predict', tab: 'tab.predict', icon: 'activity' },
     ],
   },
   {

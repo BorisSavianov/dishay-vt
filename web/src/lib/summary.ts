@@ -39,14 +39,14 @@ function positive(value: string | undefined, fallback: number): number {
   return value && Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-async function callGroq(prompt: string, apiKey: string, model: string, fetchImpl: typeof fetch): Promise<string> {
+async function callGroq(prompt: string, apiKey: string, model: string, fetchImpl: typeof fetch, system = SYSTEM): Promise<string> {
   const res = await fetchImpl(GROQ_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model,
       messages: [
-        { role: 'system', content: SYSTEM },
+        { role: 'system', content: system },
         { role: 'user', content: prompt },
       ],
       max_tokens: 1024,
@@ -61,13 +61,13 @@ async function callGroq(prompt: string, apiKey: string, model: string, fetchImpl
   return (data.choices?.[0]?.message?.content ?? '').trim();
 }
 
-async function callGemini(prompt: string, apiKey: string, model: string, fetchImpl: typeof fetch): Promise<string> {
+async function callGemini(prompt: string, apiKey: string, model: string, fetchImpl: typeof fetch, system = SYSTEM): Promise<string> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const res = await fetchImpl(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SYSTEM }] },
+      systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { maxOutputTokens: 1024, temperature: 0.2 },
     }),
@@ -78,14 +78,27 @@ async function callGemini(prompt: string, apiKey: string, model: string, fetchIm
   return (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('').trim();
 }
 
+// What any grounded AI text needs: the facts it may restate, a cache key, and who is asking.
+export type GroundedInput = {
+  facts: string[];
+  lang: Lang;
+  cacheParts: string[];
+  ip: string;
+  system?: string;
+  fallbackText?: string;
+  env?: Record<string, string | undefined>;
+  fetchImpl?: typeof fetch;
+  store?: Store;
+};
+
 // Order: cache, then Groq, then Gemini, then text built from the facts. Never throws.
-export async function summarize(input: SummaryInput): Promise<SummaryOutput> {
+export async function groundedText(input: GroundedInput): Promise<SummaryOutput> {
   const env = input.env ?? process.env;
   const fetchImpl = input.fetchImpl ?? fetch;
   const store = input.store ?? getStore();
-  const facts = buildFacts(input.datasets, input.dataset, input.lang);
+  const { facts } = input;
   const fallback = (reason: NonNullable<SummaryOutput['reason']>): SummaryOutput => ({
-    text: facts.join(' '),
+    text: input.fallbackText ?? facts.join(' '),
     provider: 'mock',
     cached: false,
     reason,
@@ -93,12 +106,9 @@ export async function summarize(input: SummaryInput): Promise<SummaryOutput> {
 
   const groqKey = env.GROQ_API_KEY;
   const geminiKey = env.GEMINI_API_KEY;
-  if (env.MOCK_LLM === '1' || (!groqKey && !geminiKey)) return fallback('no_key');
+  if (env.MOCK_LLM === '1' || (!groqKey && !geminiKey) || facts.length === 0) return fallback('no_key');
 
-  const meta = input.datasets[input.dataset].meta;
-  const cacheKey = createHash('sha256')
-    .update([input.dataset, input.lang, meta.as_of, meta.generated_at].join('|'))
-    .digest('hex');
+  const cacheKey = createHash('sha256').update(input.cacheParts.join('|')).digest('hex');
   const cached = await store.getCache(cacheKey);
   if (cached) return { text: cached.text, provider: cached.provider as Provider, cached: true };
 
@@ -108,17 +118,18 @@ export async function summarize(input: SummaryInput): Promise<SummaryOutput> {
   if (!minuteOk || !dayOk) return fallback('rate_limited');
 
   const prompt = buildPrompt(facts, input.lang);
+  const system = input.system ?? SYSTEM;
   const attempts: Array<{ provider: 'groq' | 'gemini'; run: () => Promise<string> }> = [];
   if (groqKey) {
     attempts.push({
       provider: 'groq',
-      run: () => callGroq(prompt, groqKey, env.GROQ_MODEL ?? 'openai/gpt-oss-120b', fetchImpl),
+      run: () => callGroq(prompt, groqKey, env.GROQ_MODEL ?? 'openai/gpt-oss-120b', fetchImpl, system),
     });
   }
   if (geminiKey) {
     attempts.push({
       provider: 'gemini',
-      run: () => callGemini(prompt, geminiKey, env.GEMINI_MODEL ?? 'gemini-3.5-flash', fetchImpl),
+      run: () => callGemini(prompt, geminiKey, env.GEMINI_MODEL ?? 'gemini-3.5-flash', fetchImpl, system),
     });
   }
 
@@ -137,4 +148,18 @@ export async function summarize(input: SummaryInput): Promise<SummaryOutput> {
     }
   }
   return fallback(reason);
+}
+
+// A summary of one dataset's figures.
+export async function summarize(input: SummaryInput): Promise<SummaryOutput> {
+  const meta = input.datasets[input.dataset].meta;
+  return groundedText({
+    facts: buildFacts(input.datasets, input.dataset, input.lang),
+    lang: input.lang,
+    cacheParts: [input.dataset, input.lang, meta.as_of, meta.generated_at],
+    ip: input.ip,
+    env: input.env,
+    fetchImpl: input.fetchImpl,
+    store: input.store,
+  });
 }

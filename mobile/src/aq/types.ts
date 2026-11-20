@@ -30,22 +30,30 @@ export type AqStation = {
   lon: number;
   latest: { t: string; pm25: number; pm10: number } | null;
   hourly?: AqHour[]; // 72 items; the list endpoint may leave it out
-  daily: AqDay[]; // 3 items
+  daily: AqDay[]; // 3 items: tomorrow, +2, +3 (today is in `hourly`)
 };
+
+export type AqMae = { model: number; cams: number; persistence: number };
 
 export type AqModel = {
   name: string;
+  kind?: 'mock' | 'trained' | string; // "mock" = invented numbers, label them as demo
   trained_rows: number;
   sensors: number;
   holdout: string;
-  mae: { model: number; cams: number; persistence: number };
+  mae: AqMae;
   exceedance_f1?: { model: number; cams: number };
+  // Optional extras for the „Защо?“ explanation (contract/CONTRACT.md).
+  mae_vt?: AqMae; // Veliko Tarnovo stations only, 24 h
+  mae_by_horizon?: ({ h: number } & AqMae)[];
+  importance?: { group: string; label_bg: string; label_en?: string; share: number }[];
 };
 
 export type AqForecast = {
   generated_at: string;
   model: AqModel;
   stations: AqStation[];
+  source?: 'database' | 'bundled' | 'demo'; // set by the web API
 };
 
 export type AqSource = 'live' | 'demo';

@@ -2,19 +2,26 @@ import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
-import { LEVEL_COLORS, levelNow, levelOf, levelTextColor, type Level } from '../aq/levels';
+import { clampLevel, LEVEL_COLORS, levelNow, levelOf, levelTextColor, localDate, type Level } from '../aq/levels';
 import { air, levelName } from '../aq/strings';
 import type { AqStation } from '../aq/types';
 import { useColorMode } from '../lib/color-mode';
+import { useLayout } from '../lib/layout';
 import type { Lang } from '../shared/types';
+import { Glass } from './Glass';
 import { Segmented } from './Segmented';
 
 type Horizon = '0' | '24' | '48' | '72';
 
 // Level and PM2.5 of a station `hours` ahead: now from levelNow, later from the hourly forecast.
+// The list endpoint leaves `hourly` out, so other stations fall back to that day's daily mean.
 function at(s: AqStation, hours: number, now: Date): { level: Level; pm25: number } | null {
   if (hours === 0) return levelNow(s, now);
-  if (!s.hourly?.length) return null;
+  if (!s.hourly?.length) {
+    const date = localDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + hours / 24));
+    const day = s.daily.find((d) => d.date === date);
+    return day ? { level: clampLevel(day.level), pm25: day.pm25_mean } : null;
+  }
   const target = now.getTime() + hours * 3600_000;
   let best = s.hourly[0]!;
   for (const h of s.hourly) if (Math.abs(new Date(h.t).getTime() - target) < Math.abs(new Date(best.t).getTime() - target)) best = h;
@@ -36,26 +43,13 @@ export function AirMap({
 }) {
   const { mode, colors: c } = useColorMode();
   const [h, setH] = useState<Horizon>('0');
+  const { mapHeight } = useLayout();
   const now = useMemo(() => new Date(), []);
   const values = useMemo(() => stations.map((s) => ({ s, v: at(s, Number(h), now) })), [stations, h, now]);
 
   return (
     <View style={{ gap: 12 }}>
-      <Segmented
-        label={air(lang, 'air.map.title')}
-        value={h}
-        onChange={(k) => {
-          void Haptics.selectionAsync();
-          setH(k);
-        }}
-        options={[
-          { key: '0', label: air(lang, 'air.map.now') },
-          { key: '24', label: `+24 ${lang === 'bg' ? 'ч' : 'h'}` },
-          { key: '48', label: `+48 ${lang === 'bg' ? 'ч' : 'h'}` },
-          { key: '72', label: `+72 ${lang === 'bg' ? 'ч' : 'h'}` },
-        ]}
-      />
-      <View style={[styles.map, { borderColor: c.line, backgroundColor: c.card2 }]}>
+      <View style={[styles.map, { height: mapHeight, borderColor: c.line, backgroundColor: c.card2 }]}>
         <MapView
           style={StyleSheet.absoluteFill}
           initialRegion={{ latitude: 43.08, longitude: 25.63, latitudeDelta: 0.22, longitudeDelta: 0.22 }}
@@ -95,6 +89,24 @@ export function AirMap({
             );
           })}
         </MapView>
+        {/* The time switch floats over the map as a glass bar. */}
+        <Glass fallback={c.card} interactive style={styles.overlay}>
+          <Segmented
+            bare
+            label={air(lang, 'air.map.title')}
+            value={h}
+            onChange={(k) => {
+              void Haptics.selectionAsync();
+              setH(k);
+            }}
+            options={[
+              { key: '0', label: air(lang, 'air.map.now') },
+              { key: '24', label: `+24 ${lang === 'bg' ? 'ч' : 'h'}` },
+              { key: '48', label: `+48 ${lang === 'bg' ? 'ч' : 'h'}` },
+              { key: '72', label: `+72 ${lang === 'bg' ? 'ч' : 'h'}` },
+            ]}
+          />
+        </Glass>
       </View>
       <View style={styles.legend}>
         {([1, 2, 3, 4, 5, 6] as Level[]).map((l) => (
@@ -109,7 +121,8 @@ export function AirMap({
 }
 
 const styles = StyleSheet.create({
-  map: { height: 380, borderRadius: 18, borderWidth: 1, overflow: 'hidden' },
+  map: { borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  overlay: { position: 'absolute', top: 10, left: 10, borderRadius: 16, overflow: 'hidden', padding: 2 },
   dot: { minWidth: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   dotText: { fontSize: 12, fontWeight: '800' },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
