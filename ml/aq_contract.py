@@ -18,6 +18,14 @@ def _iso(s) -> bool:
         return False
 
 
+def _shares_ok(src) -> bool:
+    """Source shares: heating/traffic/regional/other, each in [0, 1], summing to 1 ± 0.01."""
+    if not isinstance(src, dict):
+        return False
+    vals = [src.get(k) for k in ("heating", "traffic", "regional", "other")]
+    return all(_num(v) and 0 <= v <= 1 for v in vals) and abs(sum(vals) - 1) <= 0.01
+
+
 def scoreboard_errors(sb) -> list[str]:
     """model.scoreboard (CONTRACT.md): replay and live are each optional."""
     p = "model.scoreboard"
@@ -55,6 +63,16 @@ def validate(payload: dict) -> list[str]:
             errors.append(f"model.mae.{key}: number required")
     if "scoreboard" in model:
         errors += scoreboard_errors(model["scoreboard"])
+    if "sources_what_if" in model:
+        w = model["sources_what_if"] or {}
+        if w.get("method") != "estimate":
+            errors.append("model.sources_what_if.method: 'estimate' required")
+        for key in ("switch_share", "evening_drop_pm25"):
+            if not _num(w.get(key)):
+                errors.append(f"model.sources_what_if.{key}: number required")
+        lw = w.get("last_winter")
+        if lw is not None and "shares" in lw and not _shares_ok(lw["shares"]):
+            errors.append("model.sources_what_if.last_winter.shares: heating/traffic/regional/other in [0,1] summing to 1±0.01")
     stations = payload.get("stations")
     if not isinstance(stations, list) or not stations:
         return errors + ["stations: non-empty list required"]
@@ -101,4 +119,7 @@ def validate(payload: dict) -> list[str]:
             for r in d.get("reasons", []):
                 if not (isinstance(r.get("feature"), str) and isinstance(r.get("label_bg"), str) and _num(r.get("impact"))):
                     errors.append(f"{p}.daily {d.get('date')}: bad reason {r}")
+            if "sources" in d:
+                if not _shares_ok(d["sources"]):
+                    errors.append(f"{p}.daily {d.get('date')}.sources: heating/traffic/regional/other in [0,1] summing to 1±0.01")
     return errors

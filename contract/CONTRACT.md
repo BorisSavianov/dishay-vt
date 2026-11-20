@@ -226,6 +226,7 @@ Either part may be missing. When both are missing, the whole field is left out, 
     "models": "trained before winter 2025/26",
     "weather": "forecast",                 // archived forecast runs (Open-Meteo Previous Runs), never newer than the issue time
     "blh": "none",                         // "none" = no boundary-layer height at all; "era5" = observed BLH: the page MUST say so
+    "cams": "archive",                     // CAMS (model input and baseline) is Open-Meteo's CAMS archive, fresher than the issue time: the page MUST say so
     "days": 19,
     "mae_pm25_next_day": { "vt": { "model": 3.4, "cams": 6.0, "persistence": 4.9 },   // µg/m³, hourly PM2.5, next-day hours (12–35 h ahead)
                            "bg": { "model": 3.0, "cams": 7.7, "persistence": 4.2 } },
@@ -240,3 +241,35 @@ Either part may be missing. When both are missing, the whole field is left out, 
 ```
 
 All three MAEs are computed over the same hours: an hour counts only when the observation, the model, CAMS and persistence are all present.
+
+Honesty note: the weather is as forecast at the time, but CAMS (both the model's CAMS input and the CAMS baseline) is the archive, which keeps the newest run for each hour. Model vs CAMS is therefore like-for-like, while model vs persistence is slightly flattered. The holdout numbers share this. The BG numbers cover the 50 cells with CAMS history.
+
+### `sources` (estimate, VT only) and `model.sources_what_if`
+
+These are written by `ml/aq_forecast.py` from `ml/models/aq_sources.json` (`python -m ml.aq_sources --profiles`). They are an **estimate**, with no chemical analysis behind them, and every place that shows them must say „оценка“.
+
+```jsonc
+// on the featured (VT) stations' daily[] items: shares of the day's PM2.5, summing to 1
+"sources": { "heating": 0.64, "traffic": 0.08, "regional": 0.15, "other": 0.13 }
+
+// on model
+"sources_what_if": { "method": "estimate", "switch_share": 0.2,     // 20% of wood-heated homes switch heating
+                     "date": "2026-11-21", "evening_drop_pm25": 3.1, // µg/m³, mean over that date's 18:00–23:59
+                     "last_winter": {                                 // optional; observed VT, winter 2025/26 (the holdout)
+                       "from": "2025-10-01", "to": "2026-03-31",      // the season it covers (local dates)
+                       "bad_days": 23, "bad_days_after": 15, "days": 182,   // days at EAQI >= 3 (>= 18 observed hours), before/after the switch
+                       "shares": { "heating": 0.45, "traffic": 0.03, "regional": 0.25, "other": 0.27 } } }
+                                                                      // the season's PM2.5 split: same keys and rule as daily[].sources
+```
+
+`last_winter` and its `shares` are both optional, and they only ever carry real numbers from `python -m ml.aq_sources --profiles`, never mock values. The web hides the season split when `shares` is missing. The labels for the four keys live in the web strings (`web/src/lib/aq/sources.ts`), the same as for `daily[].sources`. The page states the basis using `from`/`to` and the method paragraph.
+
+How the split works:
+- **regional:** the 20th percentile of forecasts for stations 15–80 km from VT.
+- **always-on local excess:** taken from warm hours (> 10 °C) by hour and weekday/weekend, using the winters before the holdout.
+- **traffic:** that excess on weekdays minus weekends.
+- **heating:** the rest of the local excess, counted only on hours below 10 °C at the VT cell. On milder hours it goes to „друго“, because an inversion on a mild day is not home heating.
+
+Two biases to state:
+- on cold inversion nights, traffic smoke is trapped too, so heating may still be over-credited, and the what-if is an upper bound for that reason;
+- „пренос“ includes the smoke of nearby villages.

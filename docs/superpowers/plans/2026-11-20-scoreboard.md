@@ -263,6 +263,8 @@ def test_scoreboard_block_absent_without_inputs(tmp_path):
 - `sb.headline`: „Този сезон, с реалната прогноза за времето: {pct}% по-точно от CAMS за Велико Търново“, where `pct = round((cams − model) / cams × 100)` for VT.
 - `sb.note.none`: „Без прогноза за слоя на смесване – и пак по-точно от CAMS. Модели, обучени преди зима 2025/26.“
 - `sb.note.era5`: „Слоят на смесване е измерен (ERA5), не прогнозен – единственото изключение от реалната прогноза.“
+- `sb.note.cams`, always shown after the note: „CAMS (вход на модела и сравнение) е от архива на Copernicus – по-нов от момента на прогнозата, еднакво за двете колони.“
+- `sb.live`'s scope: the live score covers every logged BG sensor, not only VT, so don't label it as VT.
 - `sb.live`: „На живо от {HH:MM}: {checked_hours} проверени часа ({horizons} напред) · средна грешка {model} µg/m³, CAMS {cams}“
 
 **Section layout:**

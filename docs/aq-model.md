@@ -27,7 +27,7 @@ Given the latest readings of a citizen PM sensor, its neighbours, the weather fo
 ## Model
 
 - **Direct multi-horizon.** One model with the horizon (1–72 h) as a feature. The training rows are sensor × issue hour × randomly sampled horizon, with 40% of rows at 1–6 h.
-- **Target:** the change from the last known level, in µg/m³. Boosting starts from persistence, so the short horizons cannot do worse than "now".
+- **Target:** the change from the last known level, in µg/m³. Boosting starts from persistence, so the short horizons stay close to "now": at 1 h persistence is marginally better (1.2 vs 1.3 µg/m³), and from 3 h on the model wins.
 - **XGBoost on the GPU (RTX 4070), live as `xgb-v2`.** An L1 loss for the point forecast, plus 10% and 90% quantile models for the band, and a separate PM10 model. All 4 models refit on 5.06M rows in about 2 minutes.
   - LightGBM on the CPU tied on the same data: 24 h MAE 2.74 against 2.76 for XGBoost. Averaging the two gained nothing.
   - XGBoost was chosen for VT (3.21 vs 3.25), PM10 > 50 F1, and retraining speed. `ml/models_v1/` keeps the LightGBM v1.
@@ -63,12 +63,14 @@ Given the latest readings of a citizen PM sensor, its neighbours, the weather fo
 1. Takes the archive up to yesterday, plus the 5-minute live collector for today.
 2. Fetches the Open-Meteo and CAMS forecasts for every 0.25° cell, cached for 3 h.
 3. Predicts 1–96 h for every station. Hours past 72 use the 72 h model at its limit, and only the daily cards use them.
+   - The CAMS Europe forecast ends about 63 h out. Past its last hour, the model's CAMS inputs repeat CAMS's last forecast day: as NaN, they made the forecast jump from 2.2 to 8.3 µg/m³.
+   - The payload's `cams_pm25` stays the real value, so the dashed CAMS line on the chart stops where CAMS stops.
 4. Builds SHAP reasons per day from the physical drivers only.
 5. Writes Neon (`aq_forecast`) in one transaction, and a slim fallback JSON.
 
 ## Limits (say them out loud)
 
-- Training uses observed weather (ERA5), while live forecasts use forecast weather, so live errors will be somewhat larger than the holdout numbers.
+- Training uses observed weather (ERA5), while live forecasts use forecast weather, so live errors will be somewhat larger than the holdout numbers. The November 2026 replay (`ml/aq_scoreboard.py`) fixes this for the weather by using archived forecast runs. It doesn't fix it for CAMS: CAMS, both input and baseline, comes from the archive, which keeps the newest run for each hour.
 - Citizen sensors are not reference instruments. The humidity correction is a published approximation, not a calibration against an official station.
 - The model is trained on heating seasons only. Summer (ozone and dust events) is out of scope.
 - Day-before warnings: the point forecast (`level`) is conservative on smog days. It caught 7 of 23 bad VT days.

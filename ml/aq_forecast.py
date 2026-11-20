@@ -8,6 +8,7 @@ and the CAMS Europe forecast (cached for 3 h), and the models from ml.aq_train."
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import datetime as dt
 import json
 import sys
@@ -26,6 +27,8 @@ from ml.aq_labels import reason
 from ml.aq_levels import EU_PM10_DAILY_LIMIT, level_of
 from ml.aq_models import Model
 from ml.aq_train import predict_all
+from ml.aq_scoreboard import live_score, log_issued, read_log, scoreboard_block
+from ml.aq_sources import REGIONAL_KM, km_from_vt, load_sources_json, sources_payload
 
 ROOT = Path(__file__).resolve().parents[1]
 MODELS = ROOT / "ml" / "models"
@@ -152,6 +155,22 @@ def load_models() -> tuple[dict, dict]:
     return models, meta
 
 
+def extend_cams(arr: np.ndarray, period: int = 24) -> np.ndarray:
+    """CAMS Europe stops about 3 days out. Past its last value the model would read NaN, which it never saw in
+    training, and the forecast jumped (2.2 → 8.3 µg/m³ at hour 64). For the model's inputs only, each cell's hours
+    after its last value repeat the hours `period` earlier (the last forecast day). Interior gaps stay NaN."""
+    out = np.array(arr, dtype=float, copy=True)
+    for c in range(out.shape[1]):
+        ok = np.flatnonzero(~np.isnan(out[:, c]))
+        if not len(ok):
+            continue
+        last = int(ok[-1])
+        p = min(period, last + 1)
+        for t in range(last + 1, len(out)):
+            out[t, c] = out[t - p, c]
+    return out
+
+
 def pick_stations(panel, i: int) -> np.ndarray:
     """Columns with a reading in the last 6 h, one per OSM location (co-located sensors collapse)."""
     recent = ~np.isnan(panel.pm25[max(0, i - 5) : i + 1]).all(axis=0)
@@ -207,15 +226,27 @@ def run_once(write_db: bool = True) -> dict:
     ii = np.repeat(np.full(len(cols), i), len(H))
     ss = np.repeat(cols, len(H))
     hh = np.tile(H, len(cols))
-    X = features(panel, d, ii, ss, np.minimum(hh, HOURS_OUT))
+    # The model's inputs see CAMS extended past its horizon; the payload and the live log keep the real CAMS.
+    fpanel = dataclasses.replace(panel, cams25=extend_cams(panel.cams25), cams10=extend_cams(panel.cams10))
+    X = features(fpanel, d, ii, ss, np.minimum(hh, HOURS_OUT))
     # Weather, CAMS and the calendar must still be read at the real target hour past 72 h.
     if HOURS_DAILY > HOURS_OUT:
-        X_true = features(panel, d, ii, ss, hh)
+        X_true = features(fpanel, d, ii, ss, hh)
         past = hh > HOURS_OUT
         keep_cols = [f for f in FEATURES if not f.startswith(("pm25_", "pm10_", "nb_")) and f not in ("horizon_h", "obs_vs_cams")]
         X.loc[past, keep_cols] = X_true.loc[past, keep_cols]
     P = predict_all(models, X)
     p25, p10, lo, hi = P["pm25"], P["pm10"], P["lo"], P["hi"]
+    try:  # „Проверка на живо“: log this run's 1–72 h forecasts; never fail the forecast over it
+        keep = hh <= HOURS_OUT
+        T, cell = ii[keep] + hh[keep], panel.sensor_cell[ss[keep]]
+        log_issued(i_time + pd.Timedelta(hours=1), pd.DataFrame({
+            "issued_at": i_time + pd.Timedelta(hours=1), "sensor_id": panel.sensors["id"].to_numpy()[ss[keep]],
+            "t": panel.times[T], "horizon_h": hh[keep], "pm25": p25[keep], "pm10": p10[keep],
+            "cams_pm25": np.where(cell >= 0, panel.cams25[T, np.maximum(cell, 0)], np.nan),
+            "persistence_pm25": panel.pm25[ii[keep], ss[keep]]}))
+    except Exception as e:
+        log(f"forecast log failed: {e!r}")
     why = explain(models["pm25"], X, P["log25"], models["_space"])
 
     names = json.loads((RAW / "names.json").read_text(encoding="utf-8")) if (RAW / "names.json").exists() else {}
@@ -280,6 +311,45 @@ def run_once(write_db: bool = True) -> dict:
     ep = episode_block()
     if ep:
         model_block["episode"] = ep
+    try:
+        live = live_score(read_log(), panel.pm25, panel.times, panel.sensors["id"].to_numpy(), i_time)
+        sb = scoreboard_block(live)
+        if sb:
+            model_block["scoreboard"] = sb
+            if live:
+                log(f"live check: {live['checked_hours']} h ({live['horizons']}), MAE {live['mae_pm25']}")
+    except Exception as e:
+        log(f"scoreboard failed: {e!r}")
+    try:  # „Кой замърсява?“: an estimate, VT stations only
+        src = load_sources_json()
+        if src:
+            import warnings
+
+            from ml.aq_features import _bg_holidays
+
+            dkm = km_from_vt(panel.sensors["lat"].to_numpy()[cols], panel.sensors["lon"].to_numpy()[cols])
+            P25 = p25.reshape(len(cols), len(H))
+            reg = P25[(dkm >= REGIONAL_KM[0]) & (dkm <= REGIONAL_KM[1])]
+            with np.errstate(all="ignore"), warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                vt_fc = np.nanmean(P25[dkm <= FEATURED_KM], axis=0)
+                reg_fc = np.nanpercentile(reg, 20, axis=0) if len(reg) else np.full(len(H), np.nan)
+            dates = [(today + dt.timedelta(days=off)).isoformat() for off in (1, 2, 3)]
+            vt_cell = panel.sensor_cell[cols[dkm <= FEATURED_KM]]
+            vt_cell = vt_cell[vt_cell >= 0]
+            temp_fc = (panel.weather["temperature_2m"][i + H, int(np.bincount(vt_cell).argmax())]
+                       if len(vt_cell) else np.full(len(H), np.nan))   # forecast °C at the VT cell; heating only < 10 °C
+            shares, what_if = sources_payload(vt_fc, reg_fc, times_local[i + H], dates, src,
+                                              _bg_holidays({today.year, today.year + 1}), temp_fc)
+            for s in stations:
+                if s["featured"]:
+                    for item in s["daily"]:
+                        if item["date"] in shares:
+                            item["sources"] = shares[item["date"]]
+            model_block["sources_what_if"] = what_if
+            log(f"sources (estimate) {dates[0]}: {shares.get(dates[0])}; 20% switch −{what_if['evening_drop_pm25']} µg/m³ evening")
+    except Exception as e:
+        log(f"sources failed: {e!r}")
     payload = {"generated_at": generated, "model": model_block, "stations": stations}
     errors = validate(payload)
     if errors:

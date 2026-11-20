@@ -21,6 +21,13 @@ describe('bot messages', () => {
   it('says clean air when no day is bad for the profile', () => {
     expect(formatForecast(vt([day('2026-11-21', 3)]), 'general', NOW, false)).toContain(`✅ ${advice('bg', 'general', 1)}`);
   });
+  it('adds the sources estimate for the first day', () => {
+    const sources = { heating: 0.64, traffic: 0.08, regional: 0.15, other: 0.13 };
+    const dirty = vt([{ ...day('2026-11-21', 3), sources }, day('2026-11-22', 2)]);
+    expect(formatForecast(dirty, 'asthma', NOW, false)).toContain('Източници (оценка): отопление 64% · трафик 8% · пренос 15%');
+    const clean = vt([{ ...day('2026-11-21', 1), pm25_mean: 4, sources }]);
+    expect(formatForecast(clean, 'asthma', NOW, false)).not.toContain('Източници');
+  });
   it('formats an alert at the alert level', () => {
     const t = formatAlert(s, 'child', day('2026-11-21', 2, 3), NOW);
     expect(t.split('\n')[0]).toBe('🟡 Утре: умерен въздух в Велико Търново');
