@@ -1,5 +1,6 @@
 // The bot's messages, in Bulgarian plain text (no parse_mode).
 import { alertLevelOf, bestWindow, clampLevel, isBadFor, localDate, type Level, type Profile } from '@/lib/aq/levels';
+import { showSources, sourcesLine } from '@/lib/aq/sources';
 import { advice, air, levelName, profileName } from '@/lib/aq/strings';
 import type { AqDay, AqStation } from '@/lib/aq/types';
 import type { Episode } from './episode';
@@ -66,6 +67,8 @@ export function formatForecast(station: AqStation, profile: Profile, now: Date, 
     const why = reasons(d);
     if (why) lines.push(`   ${why}`);
   }
+  const first = days[0];
+  if (first && showSources(first)) lines.push('', sourcesLine(first.sources, 'bg'));
   lines.push('');
   const bad = days.find((d) => isBadFor(profile, alertLevelOf(d)));
   lines.push(bad ? `⚠ ${when(bad.date, now)}: ${advice('bg', profile, alertLevelOf(bad))}` : `✅ ${advice('bg', profile, 1)}`);
