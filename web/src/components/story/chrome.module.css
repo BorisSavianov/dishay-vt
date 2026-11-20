@@ -1,0 +1,48 @@
+/* Fixed chrome around the story: top bar and chapter rail. */
+.rail {
+  position: fixed;
+  right: clamp(10px, 2vw, 28px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  display: grid;
+  gap: 4px;
+}
+
+.dot {
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.dot::before {
+  content: '';
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 0 1px rgba(10, 11, 36, 0.35);
+  transition:
+    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.4s;
+}
+
+.dot:hover::before {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.dot[aria-current='step']::before {
+  background: #ffb15c;
+  transform: scale(1.6);
+}
+
+@media (max-width: 560px) {
+  .rail {
+    right: 4px;
+  }
+}

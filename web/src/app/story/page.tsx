@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Chapters } from '@/components/story/Chapters';
+import { StoryClient } from '@/components/story/StoryClient';
 import css from '@/components/story/story.module.css';
 import { readEpisode } from '@/lib/aq/episode';
 import { loadForecast } from '@/lib/aq/load';
@@ -21,9 +22,11 @@ export default async function StoryPage({ searchParams }: { searchParams: Params
   const data = buildStoryData(await loadForecast(), readEpisode(), lang, new Date());
   return (
     <main className={css.story} lang={lang}>
-      <div className={css.content}>
-        <Chapters data={data} />
-      </div>
+      <StoryClient data={data}>
+        <div className={css.content}>
+          <Chapters data={data} />
+        </div>
+      </StoryClient>
     </main>
   );
 }
