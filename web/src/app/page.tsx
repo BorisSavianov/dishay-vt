@@ -139,6 +139,7 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
               table: tr('web.chart.table'),
               hour: tr('web.chart.hour'),
               now: tr('web.chart.now'),
+              camsNote: tr('web.chart.camsnote'),
               readout: tr('web.chart.readout', { time: '{time}', value: '{value}' }),
             }}
           />

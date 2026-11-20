@@ -57,6 +57,10 @@ export default async function About({ searchParams }: { searchParams: SearchPara
               <Icon name="arrow" />
             </Link>
           </p>
+          <h2>{tr('m.live.title')}</h2>
+          <p>{tr('m.live.body')}</p>
+          <h2>{tr('m.cams.title')}</h2>
+          <p>{tr('m.cams.body')}</p>
         </article>
 
         <div className="stack">
@@ -103,6 +107,7 @@ export default async function About({ searchParams }: { searchParams: SearchPara
               <li>{tr('m.limits.3')}</li>
               <li>{tr('m.limits.4')}</li>
               <li>{tr('m.limits.5')}</li>
+              <li>{tr('m.limits.6')}</li>
             </ul>
           </section>
         </div>
