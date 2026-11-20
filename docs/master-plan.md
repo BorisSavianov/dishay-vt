@@ -192,12 +192,12 @@ Rotate the bot token and the notify secret: they were shared in chat. Use `/revo
 
 ## Freeze checklist (B6, tick in this file)
 
-- [ ] PR `teodor/aq-ml` merged; production `/api/aq` has the scoreboard and sources
+- [x] PR `teodor/aq-ml` merged; production `/api/aq` has the scoreboard and sources
 - [ ] Velko's V1 and V2 merged; `pnpm check` green
 - [ ] `/api/aq` `generated_at` < 2 h, `source: "database"`
 - [ ] Telegram `/start` and `/demo` work from the demo phone
 - [ ] Backup video: Telegram flow
-- [ ] Backup video: app alert
+- [x] Backup video: app alert (`docs/slides/backup/app-alert.mp4`)
 - [ ] Backup screenshots in `docs/slides/backup/`
 - [ ] Deck final; QR scans; the code link opens in a private window
 - [ ] 2 timed run-throughs, ≤ 5:00 each (the speaking times add up to about 4:40)
