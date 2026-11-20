@@ -130,6 +130,8 @@ Written by `ml/aq_forecast.py` on Teodor's PC every hour, upserted into Neon and
 Optional `model` fields for the „Защо?“ page (all measured on the winter 2025/26 holdout, PM2.5, µg/m³):
 
 ```jsonc
+"algorithm": "XGBoost (GPU, RTX 4070)",       // or "LightGBM": show this, do not hard-code the library
+"band_coverage": 0.77,                         // share of real values inside pm25_lo..pm25_hi (nominal 0.8)
 "mae_vt": { "model": 6.3, "cams": 16.5, "persistence": 8.0 },            // Veliko Tarnovo stations only, 24 h
 "mae_by_horizon": [ { "h": 1, "model": 1.6, "persistence": 1.5, "cams": 11.9 }, ... ],  // h = 1,3,6,12,24,36,48,72
 "importance": [ { "group": "persistence", "label_bg": "замърсяване в последните часове",

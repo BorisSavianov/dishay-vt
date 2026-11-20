@@ -19,17 +19,26 @@ class Model:
     def __init__(self, algo: str, booster, best_iteration: int | None = None):
         self.algo, self.booster, self.best_iteration = algo, booster, best_iteration
 
+    @property
+    def features(self) -> list[str]:
+        return list(self.booster.feature_name() if self.algo == "lgbm" else self.booster.feature_names)
+
+    def _cols(self, X: pd.DataFrame) -> pd.DataFrame:
+        return X[self.features]
+
     def _dm(self, X: pd.DataFrame):
         import xgboost as xgb
         return xgb.DMatrix(xgb_frame(X))
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
+        X = self._cols(X)
         if self.algo == "lgbm":
             return self.booster.predict(X)
         return self.booster.predict(self._dm(X))
 
     def contrib(self, X: pd.DataFrame) -> np.ndarray:
-        """SHAP values per feature (bias column dropped)."""
+        """SHAP values per feature of self.features (bias column dropped)."""
+        X = self._cols(X)
         if self.algo == "lgbm":
             return self.booster.predict(X, pred_contrib=True)[:, :-1]
         return self.booster.predict(self._dm(X), pred_contribs=True)[:, :-1]

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from ml.aq_features import (FEATURES, WEATHER, Panel, derive, features, flatline_mask, humidity_factor,
+from ml.aq_features import (FEATURES, UPWIND_FEATURES, WEATHER, Panel, derive, features, flatline_mask, humidity_factor,
                             mask_short_lags, targets)
 
 OBS = [f for f in FEATURES if f.startswith(("pm25_", "pm10_", "nb_")) or f == "obs_vs_cams"]
@@ -51,7 +51,7 @@ def test_targets_and_shapes():
     d = derive(p)
     i = np.array([10, 150]); s = np.array([2, 1]); h = np.array([5, 72])
     X = features(p, d, i, s, h)
-    assert list(X.columns) == FEATURES and len(X) == 2
+    assert list(X.columns) == FEATURES + UPWIND_FEATURES and len(X) == 2
     y25, _ = targets(p, i, s, h)
     assert y25[0] == p.pm25[15, 2] and np.isnan(y25[1])  # 150 + 72 is past the panel
     assert X["pm25_lag1"].iloc[0] == p.pm25[10, 2]
@@ -86,3 +86,14 @@ def test_spike_filter_drops_sensor_stuck_low():
     p25 = np.full((100, 4), 40.0, dtype=np.float32)
     p25[:, 3] = 0.6
     assert spike_filter(p25, p25 * 1.5, sensors).tolist() == [False, False, False, True]
+
+
+def test_upwind_mean_picks_the_sensor_the_wind_comes_from():
+    from ml.aq_features import upwind_mean
+    p = panel(n_hours=4)
+    # sensor 0 at the origin, sensor 1 10 km north, sensor 2 10 km south
+    p.sensors = pd.DataFrame({"id": [0, 1, 2], "lat": [43.0, 43.09, 42.91], "lon": [25.0, 25.0, 25.0]})
+    p.weather["wind_direction_10m"][:] = 0.0      # wind from the north
+    p.pm25[:] = np.array([1.0, 50.0, 5.0], dtype=np.float32)
+    up, n = upwind_mean(p, p.pm25)
+    assert up[0, 0] == 50.0 and n[0, 0] == 1      # sensor 0 sees the northern sensor upwind

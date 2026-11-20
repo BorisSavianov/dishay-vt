@@ -169,11 +169,12 @@ def pick_stations(panel, i: int) -> np.ndarray:
 
 def explain(booster, X: pd.DataFrame, log_pred: np.ndarray, space: str = "raw") -> dict[str, np.ndarray]:
     """µg/m³ each reason group adds to each row's PM2.5 (SHAP; raw-space models are additive in µg/m³)."""
-    contrib = booster.contrib(X)[:, : len(FEATURES)]
+    contrib = booster.contrib(X)
+    names = booster.features
     pred = np.expm1(log_pred)
     out: dict[str, np.ndarray] = {}
     for g in sorted(set(GROUPS.values())):
-        idx = [k for k, f in enumerate(FEATURES) if GROUPS.get(f) == g]
+        idx = [k for k, f in enumerate(names) if GROUPS.get(f) == g]
         if idx:
             c = contrib[:, idx].sum(axis=1)
             out[g] = c if space == "raw" else pred - np.expm1(log_pred - c)
@@ -273,7 +274,9 @@ def run_once(write_db: bool = True) -> dict:
     stations.sort(key=lambda s: (not s["featured"], s["city"], s["name"]))
     generated = now.tz_convert(TZ).replace(microsecond=0).isoformat()
     model_block = {k: meta[k] for k in ("name", "kind", "trained_rows", "sensors", "holdout", "mae", "exceedance_f1",
-                                        "mae_vt", "mae_by_horizon", "importance") if k in meta}
+                                        "mae_vt", "mae_by_horizon", "importance", "algorithm", "band_coverage")
+                   if k in meta}
+    model_block.setdefault("algorithm", {"lgbm": "LightGBM", "xgb": "XGBoost (GPU, RTX 4070)"}[meta.get("algo", "lgbm")])
     ep = episode_block()
     if ep:
         model_block["episode"] = ep

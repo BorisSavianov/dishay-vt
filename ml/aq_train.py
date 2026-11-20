@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import f1_score
 
-from ml.aq_features import (CATEGORICAL, FEATURES, base_log, derive, features, load_hourly, load_sensors, mask_short_lags,
+from ml.aq_features import (CATEGORICAL, FEATURES, UPWIND_FEATURES, base_log, derive, features, load_hourly, load_sensors, mask_short_lags,
                             targets, weather_frames, build_panel)
 from ml.aq_levels import ALERT_THRESHOLD, EU_PM10_DAILY_LIMIT, level_of
 from ml.aq_models import Model, fit_lgbm, fit_xgb, refit_xgb
@@ -128,7 +128,7 @@ def group_importance(booster) -> list[dict]:
     from ml.aq_features import GROUPS
     from ml.aq_labels import GROUP_NAMES
     gain: dict[str, float] = {}
-    for f, g in zip(FEATURES, booster.gain(FEATURES)):
+    for f, g in zip(booster.features, booster.gain(booster.features)):
         if f == "horizon_h":
             continue
         grp = GROUPS.get(f, "static")
@@ -157,6 +157,7 @@ def main() -> None:
     ap.add_argument("--space", choices=["raw", "log"], default="raw")
     ap.add_argument("--algo", choices=["lgbm", "xgb"], default="lgbm", help="xgb trains on the GPU (CUDA)")
     ap.add_argument("--point", choices=["l1", "l2", "huber"], default="l1", help="loss of the PM point models")
+    ap.add_argument("--upwind", action="store_true", help="add the upwind-neighbour features")
     ap.add_argument("--models-dir", default=None, help="write here (experiments: not the live models)")
     args = ap.parse_args()
     SPACE = args.space
@@ -170,7 +171,7 @@ def main() -> None:
     era5, cams = weather_frames()
     end = pd.Timestamp.now(tz="UTC").floor("h")
     panel = build_panel(hourly, sensors, era5, cams, START, end)
-    d = derive(panel)
+    d = derive(panel, upwind=args.upwind)
     n_obs = int((~np.isnan(panel.pm25)).sum())
     log(f"panel: {panel.pm25.shape[1]} sensors, {len(panel.times)} hours, {n_obs:,} sensor-hours "
         f"({len(hourly):,} raw hourly rows)")
@@ -191,7 +192,8 @@ def main() -> None:
     device = pick_device() if args.algo == "lgbm" else "cuda"
     params = {**BASE_PARAMS, "device_type": device, "num_leaves": args.leaves, "learning_rate": args.lr,
               "min_data_in_leaf": args.min_leaf, "lambda_l2": 5.0}
-    Xt, Xv = X[~in_val], X[in_val]
+    cols = FEATURES + (UPWIND_FEATURES if args.upwind else [])
+    Xt, Xv = X.loc[~in_val, cols], X.loc[in_val, cols]
     models, best = {"_space": SPACE}, {}
     r25, r10 = residual(y25, X, "pm25"), residual(y10, X, "pm10")
     point = {"objective": "l2"} if SPACE == "log" else {"objective": args.point}
@@ -278,6 +280,8 @@ def main() -> None:
                             "cams": round(r["cams"], 1)} for r in all_bg],
         "importance": group_importance(models["pm25"]),
         "trained_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "algorithm": "XGBoost (GPU, RTX 4070)" if args.algo == "xgb" else "LightGBM",
+        "band_coverage": round(coverage, 2),
         "device": device, "best_iteration": best, "space": SPACE, "algo": args.algo, "point": args.point, "sensor_hours": n_obs,
     }
     beats = h24["model"] < min(h24["persistence"], h24["cams"])
@@ -285,7 +289,7 @@ def main() -> None:
               "exceedance_f1": f1, "vt_alert_days_holdout": alert_days, "vt_exceedance_days_holdout": vt_exceed,
               "cams_bias_ratio": ratio, "beats_baselines_24h": beats,
               "importance": sorted(({"feature": f, "gain": float(g_)} for f, g_ in
-                                    zip(FEATURES, models["pm25"].gain(FEATURES))),
+                                    zip(models["pm25"].features, models["pm25"].gain(models["pm25"].features))),
                                    key=lambda r: -r["gain"])[:15]}
     REPORTS.mkdir(parents=True, exist_ok=True)
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M")
@@ -318,9 +322,9 @@ def main() -> None:
             rounds = int(best[name] * 1.1) + 1
             if args.algo == "lgbm":
                 models[name] = Model("lgbm", lgb.train({**params, **extra}, lgb.Dataset(
-                    X2, y, weight=weights(X2), categorical_feature=CATEGORICAL), num_boost_round=rounds), rounds)
+                    X2[cols], y, weight=weights(X2), categorical_feature=CATEGORICAL), num_boost_round=rounds), rounds)
             else:
-                models[name] = refit_xgb(kinds[name], X2, y, rounds)
+                models[name] = refit_xgb(kinds[name], X2[cols], y, rounds)
             log(f"refit {name} on {len(X2):,} rows")
     for name, m in models.items():
         if name.startswith("_"):

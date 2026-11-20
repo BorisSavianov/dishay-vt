@@ -214,15 +214,51 @@ class Derived:
     nb25: np.ndarray
     nb25_n: np.ndarray
     nb25_roll: np.ndarray
+    up25: np.ndarray = None
+    up_n: np.ndarray = None
 
 
-def derive(p: Panel) -> Derived:
+UPWIND_KM = (2.0, 30.0)
+UPWIND_HALF_ANGLE = 45.0
+
+
+def upwind_mean(p: Panel, x: np.ndarray, chunk: int = 48) -> tuple[np.ndarray, np.ndarray]:
+    """Mean of x over sensors 2-30 km upwind of each sensor (within +-45 deg of where the wind comes from)."""
+    lat, lon = p.sensors["lat"].to_numpy(), p.sensors["lon"].to_numpy()
+    dy = (lat[None, :] - lat[:, None]) * 111.2
+    dx = (lon[None, :] - lon[:, None]) * 111.2 * np.cos(np.radians(lat[:, None]))
+    dist = np.hypot(dx, dy)
+    bearing = (np.degrees(np.arctan2(dx, dy)) + 360) % 360      # from sensor j towards k
+    near = (dist >= UPWIND_KM[0]) & (dist <= UPWIND_KM[1])
+    cc = np.maximum(p.sensor_cell, 0)
+    wd = p.weather["wind_direction_10m"][:, cc].copy()           # [hour, sensor], where the wind comes from
+    wd[:, p.sensor_cell < 0] = np.nan
+    have = (~np.isnan(x)).astype(np.float32)
+    xv = np.nan_to_num(x).astype(np.float32)
+    out = np.full(x.shape, np.nan, dtype=np.float32)
+    cnt = np.zeros(x.shape, dtype=np.float32)
+    for a in range(0, x.shape[0], chunk):
+        w = wd[a : a + chunk]                                     # [c, j]
+        diff = np.abs((bearing[None, :, :] - w[:, :, None] + 180) % 360 - 180)
+        m = ((diff <= UPWIND_HALF_ANGLE) & near[None]).astype(np.float32)   # [c, j, k]
+        num = np.einsum("cjk,ck->cj", m, xv[a : a + chunk])
+        den = np.einsum("cjk,ck->cj", m, have[a : a + chunk])
+        with np.errstate(invalid="ignore", divide="ignore"):
+            out[a : a + chunk] = np.where(den > 0, num / den, np.nan)
+        cnt[a : a + chunk] = den
+    return out, cnt
+
+
+def derive(p: Panel, upwind: bool = True) -> Derived:
     r25 = pd.DataFrame(p.pm25).rolling(24, min_periods=6)
     r10 = pd.DataFrame(p.pm10).rolling(24, min_periods=6)
     roll25_mean = r25.mean().to_numpy(np.float32)
     nb25, nb_n = _nanmean_neighbours(p.pm25, p.neighbours)
     nb_roll, _ = _nanmean_neighbours(roll25_mean, p.neighbours)
-    return Derived(roll25_mean, r25.max().to_numpy(np.float32), r10.mean().to_numpy(np.float32), nb25, nb_n, nb_roll)
+    d = Derived(roll25_mean, r25.max().to_numpy(np.float32), r10.mean().to_numpy(np.float32), nb25, nb_n, nb_roll)
+    if upwind:
+        d.up25, d.up_n = upwind_mean(p, p.pm25)
+    return d
 
 
 LAGS = {"lag1": 0, "lag2": 1, "lag3": 2, "lag6": 5, "lag24": 23, "lag48": 47}
@@ -237,10 +273,12 @@ FEATURES = (
        "lat", "lon", "elevation", "sensor_type"]
 )
 CATEGORICAL = ["sensor_type"]
+UPWIND_FEATURES = ["up_pm25_lag1", "up_count"]   # a model uses them only if it was trained with them
 
 GROUPS = {  # feature -> reason group (ml.aq_labels)
     **{f: "persistence" for f in FEATURES if f.startswith(("pm25_", "pm10_"))},
     "nb_pm25_lag1": "neighbours", "nb_count": "neighbours", "nb_pm25_roll24": "neighbours",
+    "up_pm25_lag1": "neighbours", "up_count": "neighbours",
     "temp": "temp", "temp_drop_issue": "temp", "rh": "rh", "rh_issue": "rh",
     "wind_speed": "wind_speed", "wind_sin": "wind_speed", "wind_cos": "wind_speed", "wind_mean6": "wind_speed",
     "blh": "pbl_height", "blh_min6": "pbl_height", "pressure_tend3": "pbl_height",
@@ -329,7 +367,13 @@ def features(p: Panel, d: Derived, i: np.ndarray, s: np.ndarray, h: np.ndarray) 
     X["lon"] = p.sensors["lon"].to_numpy(np.float32)[s]
     X["elevation"] = p.sensors["elevation"].to_numpy(np.float32)[s]
     X["sensor_type"] = p.sensors["type_code"].to_numpy(np.int32)[s]
-    df = pd.DataFrame(X)[FEATURES]
+    if d.up25 is not None:
+        X["up_pm25_lag1"] = at(d.up25, i, s)
+        X["up_count"] = at(d.up_n, i, s)
+    else:
+        X["up_pm25_lag1"] = np.full(len(i), np.nan, dtype=np.float32)
+        X["up_count"] = np.full(len(i), np.nan, dtype=np.float32)
+    df = pd.DataFrame(X)[FEATURES + UPWIND_FEATURES]
     df["sensor_type"] = df["sensor_type"].astype("category").cat.set_categories([0, 1, 2, 3, 4])
     return df
 
