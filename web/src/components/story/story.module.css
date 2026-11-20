@@ -137,12 +137,20 @@
   line-height: 0.88;
   letter-spacing: -0.055em;
   font-weight: 800;
+  color: #f4f5ff;
+  text-shadow: none;
+  filter: drop-shadow(0 4px 40px rgba(5, 6, 20, 0.55));
+}
+
+/* The gradient fill sits on the text's own box: on the h1 before the split, on each line after it.
+   WebKit (and at times Chrome) paints nothing for background-clip: text through transformed children,
+   and the SplitText lines are transformed, so the clip must never live on their parent. */
+.display:not(:has(:global(.story-line))),
+.display :global(.story-line) {
   background: linear-gradient(180deg, #ffffff 30%, #c9cdf5 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  text-shadow: none;
-  filter: drop-shadow(0 4px 40px rgba(5, 6, 20, 0.55));
 }
 
 .kicker {
