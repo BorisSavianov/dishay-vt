@@ -19,8 +19,9 @@
   min-height: 100svh;
 }
 
-:global(:root[data-theme='light']) .story {
-  --card-bg: rgba(255, 255, 255, 0.72);
+/* The story is a film from night to day: dark glass while it is dusk and smog, light glass once the air clears. */
+.day {
+  --card-bg: rgba(255, 255, 255, 0.74);
   --card-line: rgba(18, 22, 58, 0.1);
   --card-ink: #12163a;
   --card-muted: #4a5078;

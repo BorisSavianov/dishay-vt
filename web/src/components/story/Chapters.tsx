@@ -10,9 +10,10 @@ export type ChapterSlots = Partial<Record<'ch2' | 'ch3' | 'ch4' | 'ch7' | 'ch8',
 type Align = 'center' | 'left' | 'right';
 
 function Chapter({ n, align, children, wide }: { n: number; align: Align; children: ReactNode; wide?: boolean }) {
+  const day = n >= 7;
   return (
     <section id={`ch-${n}`} data-chapter={n} className={`${css.chapter} ${css[align]}`} aria-labelledby={`ch-${n}-title`}>
-      <div className={`${css.card} ${wide ? css.wide : ''}`} data-reveal>
+      <div className={`${css.card} ${wide ? css.wide : ''} ${day ? css.day : ''}`} data-reveal>
         {children}
       </div>
     </section>

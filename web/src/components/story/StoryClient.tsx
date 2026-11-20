@@ -1,9 +1,13 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import type { StoryData } from '@/lib/story/facts';
 import { ProgressRail } from './ProgressRail';
 import { useStoryScroll } from './useStoryScroll';
+import css from './story.module.css';
+
+const StoryScene = dynamic(() => import('./StoryScene'), { ssr: false });
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -23,6 +27,9 @@ export function StoryClient({ data, children }: { data: StoryData; children: Rea
   const { goTo } = useStoryScroll(reduced);
   return (
     <>
+      <div className={css.layer}>
+        <StoryScene data={data} tier="high" />
+      </div>
       {children}
       <ProgressRail lang={data.lang} goTo={goTo} />
     </>

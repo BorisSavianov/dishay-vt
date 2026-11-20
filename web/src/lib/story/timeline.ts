@@ -24,7 +24,7 @@ type Key = Omit<SceneState, 'episodeHour'>;
 
 const K: Key[] = [
   // 1 Dusk over the Yantra valley
-  { cam: [6, 3.4, 9], target: [0.8, 0.3, -0.5], fov: 38, smog: 0, dusk: 1, sensorsBg: 0, bars: 0, streams: 0, clear: 0 },
+  { cam: [7.5, 5.2, 10.5], target: [1.4, 0.5, -1.2], fov: 38, smog: 0, dusk: 1, sensorsBg: 0, bars: 0, streams: 0, clear: 0 },
   // 2 The smog rolls in
   { cam: [3.5, 1.9, 5.5], target: [0, 0.4, -0.5], fov: 42, smog: 1, dusk: 0.8, sensorsBg: 0, bars: 0, streams: 0, clear: 0 },
   // 3 555 sensors over Bulgaria
