@@ -19,6 +19,7 @@ export type AqDay = {
   pm25_mean: number;
   level: number; // EEA EAQI 1..6
   exceeds_eu_limit: boolean; // PM10 daily mean > 50 µg/m³
+  alert_level?: number; // sent by the live forecast; not in the contract yet
   reasons: AqReason[];
 };
 
@@ -34,20 +35,25 @@ export type AqStation = {
   daily: AqDay[]; // 3 items
 };
 
+export type AqMae = { model: number; cams: number; persistence: number };
+
 export type AqModel = {
   name: string;
-  kind?: string; // "mock" = invented numbers, "trained" = real
+  kind?: 'mock' | 'trained' | string; // "mock" = invented numbers, label them as demo
   trained_rows: number;
   sensors: number;
   holdout: string;
-  mae: { model: number; cams: number; persistence: number };
+  mae: AqMae;
   exceedance_f1?: { model: number; cams: number };
-  // Web additions, optional: global feature importance and one past smog episode for the „Защо?“ page.
-  importances?: { feature: string; label_bg: string; label_en?: string; value: number }[];
+  // Optional extras for the „Защо?“ page (contract/CONTRACT.md), all on the winter 2025/26 holdout, PM2.5.
+  mae_vt?: AqMae; // Veliko Tarnovo stations only, 24 h
+  mae_by_horizon?: ({ h: number } & AqMae)[];
+  importance?: { group: string; label_bg: string; label_en?: string; share: number }[];
+  // Web addition, not sent yet: one past smog day and the forecast issued 24–48 h before it.
   episode?: {
     station_id: string;
-    date: string; // YYYY-MM-DD, the bad day
-    issued_at: string; // when the forecast that caught it was issued
+    date: string;
+    issued_at: string;
     observed: { t: string; pm10: number }[];
     predicted: { t: string; pm10: number }[];
     cams?: { t: string; pm10: number }[];

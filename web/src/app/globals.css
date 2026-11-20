@@ -1554,3 +1554,161 @@ button.legend-row[aria-pressed='false'] {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- Why page ---------- */
+.mae-group + .mae-group {
+  margin-top: 18px;
+}
+
+.mae-group-title {
+  margin: 16px 0 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.mae-bars li {
+  grid-template-columns: minmax(110px, 34%) minmax(0, 1fr) 3.2em;
+}
+
+.mae-bars .is-model .bar {
+  background: var(--accent);
+}
+
+.mae-bars .is-model > :first-child,
+.mae-bars .is-model > :last-child {
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.mae-bars .is-persistence .bar {
+  background: var(--t-pharmacy);
+  opacity: 0.7;
+}
+
+.mae-bars .is-cams .bar {
+  background: var(--fg);
+  opacity: 0.4;
+}
+
+.imp-bars li {
+  grid-template-columns: minmax(120px, 42%) minmax(0, 1fr) 3em;
+}
+
+.line-chart {
+  margin: 8px 0 0;
+}
+
+.line-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.line-chart text {
+  font-size: 15px;
+  fill: var(--muted);
+}
+
+.line-chart .axis-label {
+  font-size: 14px;
+}
+
+.line-chart .grid-line {
+  stroke: var(--grid);
+}
+
+.lc-line {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lc-dot {
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
+.is-model .lc-line {
+  stroke: var(--accent);
+}
+.is-model .lc-dot,
+.is-model .lc-key {
+  fill: var(--accent);
+  background: var(--accent);
+}
+
+.is-persistence .lc-line {
+  stroke: var(--t-pharmacy);
+}
+.is-persistence .lc-dot,
+.is-persistence .lc-key {
+  fill: var(--t-pharmacy);
+  background: var(--t-pharmacy);
+}
+
+.is-cams .lc-line {
+  stroke: var(--fg);
+  stroke-opacity: 0.55;
+  stroke-dasharray: 6 5;
+}
+.is-cams .lc-dot,
+.is-cams .lc-key {
+  fill: var(--fg);
+  background: var(--fg);
+  opacity: 0.6;
+}
+
+.lc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.lc-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lc-key {
+  display: inline-block;
+  width: 18px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.f1-pair {
+  display: flex;
+  gap: 28px;
+  margin: 14px 0 6px;
+}
+
+.f1-pair p {
+  display: grid;
+  gap: 2px;
+}
+
+.f1-pair strong {
+  font-size: 2.4rem;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.f1-pair p:last-child strong {
+  color: var(--muted);
+}
+
+.f1-pair span {
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.eu-stat {
+  margin: 10px 0 4px;
+  font-weight: 600;
+}

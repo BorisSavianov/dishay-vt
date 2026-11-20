@@ -38,6 +38,40 @@ def population() -> None:
     write("population_veliko_tarnovo.json", {"meta": meta, "series": series})
 
 
+def pm25_deaths() -> None:
+    """Premature deaths due to PM2.5 per 100,000 people, Bulgaria and the EU-27, by year."""
+    d = json.loads((RAW / "eurostat_sdg_11_52_BG_EU27.json").read_text(encoding="utf-8"))
+    dims, size = d["id"], d["size"]
+    index = {k: d["dimension"][k]["category"]["index"] for k in dims}
+    values = d["value"]
+
+    def at(**pos: str) -> int:
+        # Row-major position in the JSON-stat value array.
+        flat = 0
+        for dim, n in zip(dims, size):
+            flat = flat * n + index[dim][pos[dim]]
+        return flat
+
+    years = sorted(index["time"], key=lambda y: index["time"][y])
+    fixed = {k: next(iter(index[k])) for k in dims if k not in ("unit", "geo", "time")}
+
+    def series(geo: str) -> list[dict]:
+        out = []
+        for y in years:
+            v = values.get(str(at(**fixed, unit="RT", geo=geo, time=y)))
+            if v is not None:
+                out.append({"year": int(y), "value": v})
+        return out
+
+    meta = {
+        "source": "Eurostat sdg_11_52, premature deaths due to exposure to fine particulate matter (PM2.5), per 100,000 people",
+        "as_of": d["updated"][:10],
+        "license": "Eurostat reuse policy: reuse with source acknowledged",
+        "generated_at": now_iso(),
+    }
+    write("pm25_deaths_bg_eu.json", {"meta": meta, "bg": series("BG"), "eu": series("EU27_2020")})
+
+
 def physicians() -> None:
     body = json.loads((RAW / "worldbank_SH.MED.PHYS.ZS_BG.json").read_text(encoding="utf-8"))
     head, rows = body[0], body[1]
@@ -189,6 +223,7 @@ def region() -> None:
 def main() -> None:
     population()
     physicians()
+    pm25_deaths()
     facilities()
     region()
 
