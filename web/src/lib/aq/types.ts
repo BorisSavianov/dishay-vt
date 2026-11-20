@@ -27,6 +27,22 @@ export type AqDay = {
 // „Кой замърсява?“: an estimate from citizen sensors and weather, not a measurement.
 export type AqSources = { heating: number; traffic: number; regional: number; other: number };
 
+// „Ако 20% от домовете на дърва сменят отоплението“: also an estimate (contract/CONTRACT.md `model.sources_what_if`).
+export type AqWhatIf = {
+  method: 'estimate';
+  switch_share: number;
+  date: string; // the evening the drop is computed for
+  evening_drop_pm25: number; // µg/m³, mean over that date's 18:00–23:59
+  last_winter?: {
+    from?: string;
+    to?: string;
+    bad_days: number;
+    bad_days_after: number;
+    days: number;
+    shares?: AqSources;
+  };
+};
+
 export type AqStation = {
   id: string;
   name: string;
@@ -72,6 +88,7 @@ export type AqModel = {
   importance?: { group: string; label_bg: string; label_en?: string; share: number }[];
   algorithm?: string; // e.g. "XGBoost" from v2
   band_coverage?: number; // share of measured values inside pm25_lo..pm25_hi on the holdout (target 0.8)
+  sources_what_if?: AqWhatIf;
   scoreboard?: AqScoreboard; // „Проверка на живо“ (contract/CONTRACT.md `model.scoreboard`)
 };
 

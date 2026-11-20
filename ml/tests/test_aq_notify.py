@@ -49,6 +49,8 @@ def test_network_error_does_not_propagate(monkeypatch):
 
 
 def test_env_value_reads_env_local(tmp_path, monkeypatch):
+    for k in ("DATABASE_URL", "TG_NOTIFY_URL", "MISSING"):
+        monkeypatch.delenv(k, raising=False)
     (tmp_path / "web").mkdir()
     (tmp_path / "web" / ".env.local").write_text('DATABASE_URL=postgres://a\nTG_NOTIFY_URL="https://x/n"\n# c\n')
     monkeypatch.setattr(aq_forecast, "ROOT", tmp_path)
@@ -56,3 +58,13 @@ def test_env_value_reads_env_local(tmp_path, monkeypatch):
     assert aq_forecast.env_value("TG_NOTIFY_URL") == "https://x/n"
     assert aq_forecast.env_value("MISSING") is None
     assert aq_forecast.database_url() == "postgres://a"
+
+
+def test_env_value_prefers_the_environment(tmp_path, monkeypatch):
+    (tmp_path / "web").mkdir()
+    (tmp_path / "web" / ".env.local").write_text("DATABASE_URL=postgres://file\n")
+    monkeypatch.setattr(aq_forecast, "ROOT", tmp_path)
+    monkeypatch.setenv("DATABASE_URL", "postgres://env")
+    assert aq_forecast.database_url() == "postgres://env"
+    monkeypatch.setenv("DATABASE_URL", "")   # an unset GitHub secret arrives as ""
+    assert aq_forecast.database_url() == "postgres://file"

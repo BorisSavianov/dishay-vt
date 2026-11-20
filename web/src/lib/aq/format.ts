@@ -1,4 +1,5 @@
 import type { Lang } from '../types';
+import { air } from './strings';
 
 // The servers run in UTC; every time on screen is Bulgarian local time.
 export const TZ = 'Europe/Sofia';
@@ -46,4 +47,22 @@ export function dayLabel(lang: Lang, date: string, withYear = false): string {
 // µg/m³ values: whole numbers below 100 read better with one decimal only when small.
 export function fmtPm(lang: Lang, n: number): string {
   return new Intl.NumberFormat(locale(lang), { maximumFractionDigits: n < 10 ? 1 : 0 }).format(n);
+}
+
+export const STALE_MS = 2 * 3600_000;
+
+// „Последна актуализация: днес, 13:07“ for the header, and a note when the forecast is more than 2 hours old.
+export function freshness(lang: Lang, iso: string, now: Date = new Date()): { label: string; stale: boolean; note: string | null } | null {
+  const made = new Date(iso);
+  if (Number.isNaN(made.getTime())) return null;
+  const time = clockLabel(lang, iso);
+  const day = sofiaDate(made);
+  const when =
+    day === sofiaDate(now)
+      ? air(lang, 'fresh.today', { time })
+      : day === sofiaDate(new Date(now.getTime() - 24 * 3600_000))
+        ? air(lang, 'fresh.yesterday', { time })
+        : air(lang, 'fresh.other', { date: `${day.slice(8, 10)}.${day.slice(5, 7)}`, time });
+  const stale = now.getTime() - made.getTime() > STALE_MS;
+  return { label: air(lang, 'fresh.label', { when }), stale, note: stale ? air(lang, 'fresh.stale', { time }) : null };
 }

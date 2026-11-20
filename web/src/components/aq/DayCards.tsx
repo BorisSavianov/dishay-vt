@@ -3,7 +3,9 @@ import { clampLevel, LEVEL_COLORS } from '@/lib/aq/levels';
 import { air } from '@/lib/aq/strings';
 import type { AqDay } from '@/lib/aq/types';
 import type { Lang } from '@/lib/types';
+import { showSources } from '@/lib/aq/sources';
 import { LevelChip } from './Level';
+import { SourceBar } from './SourceBar';
 
 // The next three days: level, daily means, the EU-limit flag and the model's top reasons.
 export function DayCards({ days, lang, today, tomorrow }: { days: AqDay[]; lang: Lang; today: string; tomorrow: string }) {
@@ -27,6 +29,8 @@ export function DayCards({ days, lang, today, tomorrow }: { days: AqDay[]; lang:
                 {air(lang, 'web.days.means', { pm10: fmtPm(lang, d.pm10_mean), pm25: fmtPm(lang, d.pm25_mean) })}
               </p>
               {d.exceeds_eu_limit && <p className="eu-flag">{air(lang, 'air.eu')}</p>}
+              {reasons.length === 0 && <p className="day-clean">{air(lang, 'day.clean')}</p>}
+              {showSources(d) && <SourceBar sources={d.sources} lang={lang} />}
               {reasons.length > 0 && (
                 <div className="reasons">
                   <p className="reasons-title">{air(lang, 'air.days.why')}</p>

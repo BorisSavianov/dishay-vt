@@ -9,6 +9,7 @@ import { AppShell } from '@/components/shell/AppShell';
 import { Icon } from '@/components/shell/Icon';
 import { clockLabel, fmtPm, hourLabel, sofiaDate } from '@/lib/aq/format';
 import { levelNow, PROFILES, type Profile } from '@/lib/aq/levels';
+import { whatIfLine } from '@/lib/aq/sources';
 import { t } from '@/lib/i18n';
 import { featuredStation, loadForecast } from '@/lib/aq/load';
 import { advice, air, profileName, type AirKey } from '@/lib/aq/strings';
@@ -37,8 +38,14 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
   const current = levelNow(station, now);
   const hourly = (station.hourly ?? []).filter((h) => new Date(h.t).getTime() >= now.getTime() - 3600_000);
   const days = station.daily.filter((d) => d.date >= today).slice(0, 3);
-  const { mae } = forecast.model;
-  const modelReady = source !== 'demo' && mae.model > 0;
+  const m = forecast.model;
+  const modelReady = source !== 'demo' && m.mae.model > 0;
+  // The card is about Veliko Tarnovo: this season with the real weather forecast if we have it, else last winter's.
+  const season = m.scoreboard?.replay;
+  const vtSeason = season?.mae_pm25_next_day.vt;
+  const vtWinter = m.mae_vt ?? m.mae;
+  const whatIf = station.daily.some((d) => d.sources) && m.sources_what_if ? whatIfLine(m.sources_what_if, lang) : null;
+  const short = (d: string) => `${Number(d.slice(8, 10))}.${Number(d.slice(5, 7))}`;
 
   return (
     <AppShell
@@ -94,13 +101,20 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
             {tr('web.model.title')}
           </h2>
           <p className="insight-text">
-            {modelReady
-              ? tr('web.model.body', {
-                  model: fmtPm(lang, mae.model),
-                  cams: fmtPm(lang, mae.cams),
-                  persistence: fmtPm(lang, mae.persistence),
-                })
-              : tr('web.model.pending')}
+            {!modelReady
+              ? tr('web.model.pending')
+              : season && vtSeason
+                ? tr('web.model.season', {
+                    from: short(season.from),
+                    to: short(season.to),
+                    model: fmtPm(lang, vtSeason.model),
+                    cams: fmtPm(lang, vtSeason.cams),
+                  })
+                : tr('web.model.vt', {
+                    model: fmtPm(lang, vtWinter.model),
+                    cams: fmtPm(lang, vtWinter.cams),
+                    persistence: fmtPm(lang, vtWinter.persistence),
+                  })}
           </p>
           <Link className="btn insight-cta" href={withLang('/why', lang)}>
             {tr('web.model.cta')}
@@ -125,6 +139,7 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
               table: tr('web.chart.table'),
               hour: tr('web.chart.hour'),
               now: tr('web.chart.now'),
+              camsNote: tr('web.chart.camsnote'),
               readout: tr('web.chart.readout', { time: '{time}', value: '{value}' }),
             }}
           />
@@ -135,6 +150,7 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
       )}
 
       {days.length > 0 && <DayCards days={days} lang={lang} today={today} tomorrow={tomorrow} />}
+      {whatIf && <p className="note what-if">{whatIf}</p>}
 
       <ExplainCard
         station={station.id}

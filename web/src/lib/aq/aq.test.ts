@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GET as getStation } from '@/app/api/aq/[id]/route';
 import { GET as getList } from '@/app/api/aq/route';
+import { freshness } from './format';
 import { isBadFor, levelOf } from './levels';
 import { clearForecastCache, featuredStation, isForecast, loadForecast, withoutHourly } from './load';
 import { demoForecast } from './mock';
@@ -107,5 +108,28 @@ describe('forecast cache', () => {
     const second = await loadForecast();
     expect(first.source).not.toBe('database');
     expect(second.forecast).not.toBe(first.forecast);
+  });
+});
+
+describe('freshness', () => {
+  const made = '2026-11-20T13:07:00+02:00';
+
+  it('says today with the time, and no note while the forecast is fresh', () => {
+    const f = freshness('bg', made, new Date('2026-11-20T11:30:00Z'))!;
+    expect(f.label).toBe('Последна актуализация: днес, 13:07');
+    expect(f.stale).toBe(false);
+    expect(f.note).toBeNull();
+  });
+
+  it('shows an amber note when the forecast is more than 2 hours old', () => {
+    const f = freshness('bg', made, new Date('2026-11-20T14:00:00Z'))!;
+    expect(f.stale).toBe(true);
+    expect(f.note).toBe('Прогнозата е от 13:07 – обновява се всеки час.');
+    expect(freshness('en', made, new Date('2026-11-20T14:00:00Z'))!.note).toContain('13:07');
+  });
+
+  it('says yesterday, and gives null for a bad time', () => {
+    expect(freshness('bg', made, new Date('2026-11-21T09:00:00Z'))!.label).toContain('вчера, 13:07');
+    expect(freshness('bg', 'nope')).toBeNull();
   });
 });

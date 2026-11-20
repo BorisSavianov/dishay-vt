@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { AppShell } from '@/components/shell/AppShell';
 import { hourLabel } from '@/lib/aq/format';
 import { loadForecast } from '@/lib/aq/load';
@@ -6,7 +7,7 @@ import { air, type AirKey } from '@/lib/aq/strings';
 import { loadDatasets } from '@/lib/data';
 import { fmtInt } from '@/lib/format';
 import { t } from '@/lib/i18n';
-import { langOf, type SearchParams } from '@/lib/page';
+import { langOf, withLang, type SearchParams } from '@/lib/page';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,6 +100,9 @@ export default async function Sources({ searchParams }: { searchParams: SearchPa
           </table>
         </div>
       </section>
+      <p className="note method-link">
+        <Link href={withLang('/about', lang)}>{tr('s.method')}</Link>
+      </p>
     </AppShell>
   );
 }

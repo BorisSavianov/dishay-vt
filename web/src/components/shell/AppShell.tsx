@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { freshness } from '@/lib/aq/format';
 import { fmtDate } from '@/lib/format';
 import { t } from '@/lib/i18n';
 import type { MessageKey } from '@/lib/i18n';
@@ -20,7 +21,7 @@ const GROUPS: { label: MessageKey; items: NavItem[] }[] = [
     items: [
       { id: 'dashboard', href: '/', label: 'nav.dashboard', tab: 'tab.dashboard', icon: 'home' },
       { id: 'geo', href: '/geographic', label: 'nav.geo', tab: 'tab.map', icon: 'map' },
-      { id: 'why', href: '/why', label: 'nav.why', icon: 'trendDown' },
+      { id: 'why', href: '/why', label: 'nav.why', tab: 'tab.why', icon: 'trendDown' },
       { id: 'ai', href: '/insights', label: 'nav.ai', tab: 'tab.ai', icon: 'sparkle' },
     ],
   },
@@ -60,6 +61,8 @@ export function AppShell({
 }) {
   const tr = (key: MessageKey, vars?: Record<string, string | number>) => t(lang, key, vars);
   const names = { bg: tr('lang.bg'), en: tr('lang.en') };
+  // A forecast has a time (an ISO instant); the datasets have only a date.
+  const fresh = updated && updated.includes('T') ? freshness(lang, updated) : null;
   const controls = (
     <>
       <LangSwitch lang={lang} label={tr('lang.label')} names={names} />
@@ -123,7 +126,7 @@ export function AppShell({
               {updated && (
                 <span className="pill">
                   <Icon name="refresh" />
-                  {tr('updated.label', { date: fmtDate(lang, updated) })}
+                  {fresh ? fresh.label : tr('updated.label', { date: fmtDate(lang, updated) })}
                 </span>
               )}
               {exportable && (
@@ -135,6 +138,11 @@ export function AppShell({
               <div className="only-wide head-actions">{controls}</div>
             </div>
           </header>
+          {fresh?.note && (
+            <p className="notice" role="status">
+              {fresh.note}
+            </p>
+          )}
           {bundled && (
             <p className="notice" role="status">
               {tr('notice.bundled')}

@@ -1,44 +1,49 @@
-"""Live 72 h forecast for every BG station: predict, explain, upsert into Neon, write the fallback JSON.
+"""Live 72 h forecast for every BG station: predict, explain, upsert into Neon.
 
-    uv run --group ml python -u -m ml.aq_forecast            # every hour at :07, forever
-    uv run --group ml python -u -m ml.aq_forecast --once [--no-db]
+    uv run --group ml python -u -m ml.aq_forecast --once                 # what GitHub Actions runs every hour
+    uv run --group ml python -u -m ml.aq_forecast --once --no-db --out forecast.json   # dry run
+    uv run --group ml python -u -m ml.aq_forecast --once --no-db --fallback            # refresh the bundled JSON
 
-Inputs: the archive hourly parts (yesterday and before), the live collector (today), the Open-Meteo forecast
-and the CAMS Europe forecast (cached for 3 h), and the models from ml.aq_train."""
+Production is .github/workflows/forecast.yml (hourly at :07); docs/aq-model.md has the run book.
+Inputs: Neon aq_live_hourly (7 days of hourly means) plus this hour's sensor.community 1-hour averages
+(ml.aq_live), the Open-Meteo forecast and the CAMS Europe forecast (cached for 3 h), and the models from the
+models-latest release (ml.aq_release). Every Neon write happens in one transaction at the end; --no-db runs the same
+SQL and rolls it back, so it reads Neon and changes nothing."""
 from __future__ import annotations
 
 import argparse
 import dataclasses
 import datetime as dt
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
 import httpx
-import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
 from ml.aq_contract import validate
 from ml.aq_features import (FEATURES, GROUPS, RAW, TZ, WEATHER, build_panel, derive, features, humidity_factor,
-                            load_hourly, load_sensors)
+                            load_sensors)
 from ml.aq_labels import reason
 from ml.aq_levels import EU_PM10_DAILY_LIMIT, level_of
 from ml.aq_models import Model
 from ml.aq_train import predict_all
-from ml.aq_scoreboard import live_score, log_issued, read_log, scoreboard_block
+from ml.aq_live import ensure_tables, fetch_1h, parse_1h, read_hourly, upsert_hourly
+from ml.aq_scoreboard import ensure_log_tables, live_score, log_issued, scoreboard_block
 from ml.aq_sources import REGIONAL_KM, km_from_vt, load_sources_json, sources_payload
 
 ROOT = Path(__file__).resolve().parents[1]
 MODELS = ROOT / "ml" / "models"
 OUT = ROOT / "web" / "src" / "data" / "aq_forecast.json"
-LIVE = RAW / "live"
-FC_CACHE = RAW / "forecast_cache"
+FC_CACHE = RAW / "forecast_cache"   # restored and saved by actions/cache in the workflow
 HEADERS = {"User-Agent": "dishay-vt-hackathon/0.1 (open-data student project)"}
 HOURS_OUT = 72
 HOURS_DAILY = 96       # daily cards need up to +3 days; horizons past 72 use the 72 h model at its limit
 CACHE_TTL = 3 * 3600
+CACHE_MAX_STALE = 24 * 3600   # a forecast fetch that fails may fall back to a cached copy up to this old
 FEATURED_KM = 10
 # Physical drivers only: "persistence" and "neighbours" mostly encode mean reversion, which reads oddly as a reason.
 REASON_GROUPS = {"pbl_height", "wind_speed", "temp", "rh", "precip", "cams", "calendar"}
@@ -60,67 +65,66 @@ def r1(x) -> float:
 
 # ---------------- inputs ----------------
 
-def collector_hourly(days: int = 3) -> pd.DataFrame:
-    frames = []
-    for path in sorted(LIVE.glob("readings-*.csv"))[-days:]:
-        frames.append(pd.read_csv(path))
-    if not frames:
-        return pd.DataFrame(columns=["sensor_id", "hour", "pm10", "pm25", "n"])
-    df = pd.concat(frames).drop_duplicates(["sensor_id", "timestamp"])
-    df["time"] = pd.to_datetime(df["timestamp"], utc=True)
-    df["hour"] = df["time"].dt.floor("h")
-    for c in ("pm10", "pm25"):
-        df[c] = pd.to_numeric(df[c], errors="coerce")
-    g = df.groupby(["sensor_id", "hour"]).agg(pm10=("pm10", "mean"), pm25=("pm25", "mean"), n=("pm25", "count"))
-    out = g.reset_index()
-    # The collector sees ~12 snapshots an hour: scale n so build_panel's readings-per-hour rule means "half an hour".
-    out["n"] = out["n"] * 2
-    return out
+def warn(msg: str) -> None:
+    """A log line that GitHub Actions also shows as a warning on the run."""
+    log(msg)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        print(f"::warning::{msg}", flush=True)
 
 
-def latest_readings(days: int = 1) -> pd.DataFrame:
-    frames = [pd.read_csv(p) for p in sorted(LIVE.glob("readings-*.csv"))[-days - 1:]]
-    if not frames:
-        return pd.DataFrame()
-    df = pd.concat(frames)
-    df["time"] = pd.to_datetime(df["timestamp"], utc=True)
-    df = df.dropna(subset=["pm25", "pm10"]).sort_values("time")
-    return df.groupby("sensor_id").tail(1).set_index("sensor_id")
-
-
-def _cached(name: str):
+def _read_cache(name: str) -> tuple[list | None, float]:
+    """(data, age in s) of a cached response, or (None, inf). Old caches (a bare list) are aged by mtime."""
     path = FC_CACHE / name
-    if path.exists() and time.time() - path.stat().st_mtime < CACHE_TTL:
-        return json.loads(path.read_text(encoding="utf-8"))
-    return None
+    if not path.exists():
+        return None, float("inf")
+    try:
+        obj = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return None, float("inf")
+    if isinstance(obj, dict) and "fetched_at" in obj:
+        return obj["data"], time.time() - float(obj["fetched_at"])
+    return obj, time.time() - path.stat().st_mtime
+
+
+def _get_json(client, url, params, attempts: int = 3):
+    """GET with backoff on 429 (shared runner IPs hit Open-Meteo's per-IP limit) and 5xx."""
+    for k in range(attempts):
+        r = client.get(url, params=params, timeout=120)
+        if r.status_code == 429 or r.status_code >= 500:
+            if k == attempts - 1:
+                r.raise_for_status()
+            wait = min(int(r.headers.get("Retry-After", "0") or 0) or 20 * (k + 1), 60)
+            log(f"{url.split('/')[2]} {r.status_code}, waiting {wait} s")
+            time.sleep(wait)
+            continue
+        r.raise_for_status()
+        return r.json()
+    raise AssertionError("unreachable")
 
 
 def _batched(client, url, cells, params, name) -> list[dict]:
-    hit = _cached(name)
-    if hit is not None:
+    """All cells, 50 per request, cached CACHE_TTL. If the fetch fails, a cached copy up to CACHE_MAX_STALE old
+    is served instead of failing the run."""
+    hit, age = _read_cache(name)
+    if hit is not None and age < CACHE_TTL:
         return hit
-    out = []
-    for k in range(0, len(cells), 50):
-        part = cells[k : k + 50]
-        lat = ",".join(c.split("_")[0] for c in part)
-        lon = ",".join(c.split("_")[1] for c in part)
-        for attempt in range(6):
-            r = client.get(url, params={**params, "latitude": lat, "longitude": lon}, timeout=120)
-            if r.status_code == 429:
-                log("open-meteo 429, waiting 65 s")
-                time.sleep(65)
-                continue
-            r.raise_for_status()
-            data = r.json()
+    try:
+        out = []
+        for k in range(0, len(cells), 50):
+            part = cells[k : k + 50]
+            data = _get_json(client, url, {**params, "latitude": ",".join(c.split("_")[0] for c in part),
+                                           "longitude": ",".join(c.split("_")[1] for c in part)})
             data = data if isinstance(data, list) else [data]
             for c, d in zip(part, data):
                 d["cell"] = c
             out.extend(data)
-            break
-        else:
-            raise RuntimeError(f"open-meteo kept refusing {url}")
+    except (httpx.HTTPError, ValueError) as e:
+        if hit is not None and age < CACHE_MAX_STALE:
+            warn(f"{name}: fetch failed ({e!r}); using the cached copy from {age / 3600:.1f} h ago")
+            return hit
+        raise
     FC_CACHE.mkdir(parents=True, exist_ok=True)
-    (FC_CACHE / name).write_text(json.dumps(out), encoding="utf-8")
+    (FC_CACHE / name).write_text(json.dumps({"fetched_at": time.time(), "data": out}), encoding="utf-8")
     return out
 
 
@@ -148,6 +152,7 @@ def forecast_frames(cells: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
 # ---------------- forecast ----------------
 
 def load_models() -> tuple[dict, dict]:
+    """The models on CPU (they are trained on CUDA; inference needs no GPU)."""
     meta = json.loads((MODELS / "aq_meta.json").read_text(encoding="utf-8"))
     algo = meta.get("algo", "lgbm")
     models = {n: Model.load(MODELS / f"aq_{n}", algo) for n in ("pm25", "pm10", "pm25_q10", "pm25_q90")}
@@ -200,8 +205,15 @@ def explain(booster, X: pd.DataFrame, log_pred: np.ndarray, space: str = "raw") 
     return out
 
 
-def run_once(write_db: bool = True) -> dict:
+def run_once(write_db: bool = True, out: Path | None = None, fallback: bool = False) -> dict:
+    """One forecast. Every Neon write (this hour's readings, the forecast, its log and score) is one transaction
+    at the end: any failure leaves Neon as it was. write_db=False runs the same SQL and rolls it back."""
+    import psycopg
+
     t0 = time.monotonic()
+    url = database_url()
+    if not url:
+        raise RuntimeError("DATABASE_URL is not set (environment or web/.env.local)")
     models, meta = load_models()
     sensors = load_sensors()
     now = pd.Timestamp.now(tz="UTC")
@@ -209,13 +221,69 @@ def run_once(write_db: bool = True) -> dict:
     start = i_time - pd.Timedelta(days=7)
     end = i_time + pd.Timedelta(hours=HOURS_DAILY + 1)
 
-    archive = load_hourly()
-    archive = archive[archive["hour"] >= start]
-    live = collector_hourly()
-    live = live[live["hour"] >= start]
-    hourly = pd.concat([live, archive], ignore_index=True).drop_duplicates(["sensor_id", "hour"], keep="last")
+    with httpx.Client(headers=HEADERS) as client:
+        fresh = parse_1h(fetch_1h(client), sensors["id"], i_time)
+    if fresh.empty:
+        raise RuntimeError("data.1h.json has no BG readings for the last hour")
+    log(f"data.1h.json: {len(fresh)} BG sensors (readings to {fresh['t'].max():%H:%M} UTC), "
+        f"filed as {i_time:%Y-%m-%d %H}:00 UTC")
     cells = sorted(set(sensors["cell"].dropna()))
     wx, cams = forecast_frames(cells)
+    with psycopg.connect(url, connect_timeout=20, autocommit=True) as conn:
+        with conn.cursor() as cur:
+            stored = read_hourly(cur, start)
+        log(f"Neon aq_live_hourly: {len(stored)} rows since {start:%Y-%m-%d %H}:00 UTC")
+        hourly = pd.concat([stored, fresh.drop(columns="t")], ignore_index=True).drop_duplicates(
+            ["sensor_id", "hour"], keep="last")
+        payload, panel, log_rows = forecast_payload(hourly, sensors, wx, cams, fresh, models, meta, now, i_time,
+                                                    start, end)
+        with conn.transaction(force_rollback=not write_db), conn.cursor() as cur:
+            ensure_tables(cur)
+            ensure_log_tables(cur)
+            n_live = upsert_hourly(cur, fresh, "1h", now)
+            live = None
+            try:  # „Проверка на живо“: log this run, score the hours that just got readings; never fail the forecast
+                with conn.transaction():
+                    log_issued(cur, i_time + pd.Timedelta(hours=1), log_rows)
+                    live = live_score(cur, panel.pm25, panel.times, panel.sensors["id"].to_numpy(), i_time)
+            except Exception as e:
+                warn(f"forecast log / live score failed: {e!r}")
+            try:
+                sb = scoreboard_block(live)
+                if sb:
+                    payload["model"]["scoreboard"] = sb
+                    if live:
+                        log(f"live check: {live['checked_hours']} h ({live['horizons']}), MAE {live['mae_pm25']}")
+            except Exception as e:
+                warn(f"scoreboard failed: {e!r}")
+            errors = validate(payload)
+            if errors:
+                raise RuntimeError(f"payload fails the contract: {errors[:5]}")
+            upsert(cur, payload)
+        log(f"Neon {'committed' if write_db else 'rolled back (--no-db)'}: aq_live_hourly +{n_live}, "
+            f"aq_forecast {len(payload['stations']) + 1} rows, aq_forecast_log +{log_rows['sensor_id'].nunique()}")
+    if write_db:
+        notify_telegram()
+    text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    if out:
+        Path(out).write_text(text + "\n", encoding="utf-8")
+    if fallback:
+        # The bundled fallback keeps hourly for the featured stations only (all of it is in Neon), so the
+        # web bundle and the mobile copy stay small. /api/aq leaves hourly out anyway.
+        slim = {**payload, "stations": [s if s["featured"] else {k: v for k, v in s.items() if k != "hourly"}
+                                        for s in payload["stations"]]}
+        OUT.write_text(json.dumps(slim, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+        log(f"wrote {OUT.relative_to(ROOT)}")
+    stations = payload["stations"]
+    vt = next((s for s in stations if s["id"] == "sc-35767"), stations[0])
+    log(f"forecast {payload['generated_at']}: {len(stations)} stations, {len(text) / 1e6:.1f} MB, "
+        f"VT {vt['name']} days {[(x['date'], x['pm10_mean'], x['level']) for x in vt['daily']]} "
+        f"in {time.monotonic() - t0:.0f}s")
+    return payload
+
+
+def forecast_payload(hourly, sensors, wx, cams, fresh, models, meta, now, i_time, start, end):
+    """(payload without model.scoreboard, panel, this run's 1–72 h forecasts in LOG_COLS) from the inputs."""
     panel = build_panel(hourly, sensors, wx, cams, start, end, min_uptime=0.3)
     d = derive(panel)
     i = panel.index_of(i_time)
@@ -237,20 +305,17 @@ def run_once(write_db: bool = True) -> dict:
         X.loc[past, keep_cols] = X_true.loc[past, keep_cols]
     P = predict_all(models, X)
     p25, p10, lo, hi = P["pm25"], P["pm10"], P["lo"], P["hi"]
-    try:  # „Проверка на живо“: log this run's 1–72 h forecasts; never fail the forecast over it
-        keep = hh <= HOURS_OUT
-        T, cell = ii[keep] + hh[keep], panel.sensor_cell[ss[keep]]
-        log_issued(i_time + pd.Timedelta(hours=1), pd.DataFrame({
-            "issued_at": i_time + pd.Timedelta(hours=1), "sensor_id": panel.sensors["id"].to_numpy()[ss[keep]],
-            "t": panel.times[T], "horizon_h": hh[keep], "pm25": p25[keep], "pm10": p10[keep],
-            "cams_pm25": np.where(cell >= 0, panel.cams25[T, np.maximum(cell, 0)], np.nan),
-            "persistence_pm25": panel.pm25[ii[keep], ss[keep]]}))
-    except Exception as e:
-        log(f"forecast log failed: {e!r}")
+    keep = hh <= HOURS_OUT   # „Проверка на живо“: this run's 1–72 h forecasts, logged with the Neon writes
+    T, cell = ii[keep] + hh[keep], panel.sensor_cell[ss[keep]]
+    log_rows = pd.DataFrame({
+        "issued_at": i_time + pd.Timedelta(hours=1), "sensor_id": panel.sensors["id"].to_numpy()[ss[keep]],
+        "t": panel.times[T], "horizon_h": hh[keep], "pm25": p25[keep], "pm10": p10[keep],
+        "cams_pm25": np.where(cell >= 0, panel.cams25[T, np.maximum(cell, 0)], np.nan),
+        "persistence_pm25": panel.pm25[ii[keep], ss[keep]]})
     why = explain(models["pm25"], X, P["log25"], models["_space"])
 
     names = json.loads((RAW / "names.json").read_text(encoding="utf-8")) if (RAW / "names.json").exists() else {}
-    latest = latest_readings()
+    latest = fresh.set_index("sensor_id")   # this hour's 1-hour means; t = the sensor's latest reading
     times_local = panel.times.tz_convert(TZ)
     today = now.tz_convert(TZ).date()
     stations = []
@@ -288,10 +353,10 @@ def run_once(write_db: bool = True) -> dict:
         if sid in latest.index:
             row = latest.loc[sid]
             cell = panel.sensor_cell[c]
-            hr = panel.times.searchsorted(row["time"].floor("h"))
+            hr = panel.times.searchsorted(row["t"].floor("h"))
             rh = panel.weather["relative_humidity_2m"][min(hr, len(panel.times) - 1), cell] if cell >= 0 else np.nan
             f = float(humidity_factor(np.array([rh]))[0]) if panel.sensors["type_code"].iat[c] != 2 else 1.0
-            lt = {"t": row["time"].tz_convert(TZ).isoformat(timespec="seconds"),
+            lt = {"t": row["t"].tz_convert(TZ).isoformat(timespec="seconds"),
                   "pm25": r1(row["pm25"] / f), "pm10": r1(row["pm10"] / f)}
         nm = names.get(str(sid), {})
         slat, slon = float(panel.sensors["lat"].iat[c]), float(panel.sensors["lon"].iat[c])
@@ -311,15 +376,6 @@ def run_once(write_db: bool = True) -> dict:
     ep = episode_block()
     if ep:
         model_block["episode"] = ep
-    try:
-        live = live_score(read_log(), panel.pm25, panel.times, panel.sensors["id"].to_numpy(), i_time)
-        sb = scoreboard_block(live)
-        if sb:
-            model_block["scoreboard"] = sb
-            if live:
-                log(f"live check: {live['checked_hours']} h ({live['horizons']}), MAE {live['mae_pm25']}")
-    except Exception as e:
-        log(f"scoreboard failed: {e!r}")
     try:  # „Кой замърсява?“: an estimate, VT stations only
         src = load_sources_json()
         if src:
@@ -349,24 +405,8 @@ def run_once(write_db: bool = True) -> dict:
             model_block["sources_what_if"] = what_if
             log(f"sources (estimate) {dates[0]}: {shares.get(dates[0])}; 20% switch −{what_if['evening_drop_pm25']} µg/m³ evening")
     except Exception as e:
-        log(f"sources failed: {e!r}")
-    payload = {"generated_at": generated, "model": model_block, "stations": stations}
-    errors = validate(payload)
-    if errors:
-        raise RuntimeError(f"payload fails the contract: {errors[:5]}")
-    # The bundled fallback keeps hourly for the featured stations only (all of it is in Neon), so the
-    # web bundle and the mobile copy stay small. /api/aq leaves hourly out anyway.
-    slim = {**payload, "stations": [s if s["featured"] else {k: v for k, v in s.items() if k != "hourly"}
-                                    for s in stations]}
-    OUT.write_text(json.dumps(slim, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
-    if write_db:
-        upsert(payload)
-        notify_telegram()
-    vt = next((s for s in stations if s["id"] == "sc-35767"), stations[0])
-    log(f"forecast {generated}: {len(stations)} stations, {OUT.stat().st_size / 1e6:.1f} MB, "
-        f"VT {vt['name']} days {[(x['date'], x['pm10_mean'], x['level']) for x in vt['daily']]} "
-        f"in {time.monotonic() - t0:.0f}s")
-    return payload
+        warn(f"sources failed: {e!r}")
+    return {"generated_at": generated, "model": model_block, "stations": stations}, panel, log_rows
 
 
 def episode_block() -> dict | None:
@@ -389,7 +429,11 @@ def episode_block() -> dict | None:
 # ---------------- Neon ----------------
 
 def env_value(key: str) -> str | None:
-    """A value from web/.env.local (the same file the web app reads), or None."""
+    """An environment variable (GitHub Actions secrets), else the value in web/.env.local (the file the web app
+    reads), else None."""
+    v = os.environ.get(key, "").strip()
+    if v:
+        return v
     env = ROOT / "web" / ".env.local"
     if env.exists():
         for line in env.read_text(encoding="utf-8").splitlines():
@@ -406,7 +450,7 @@ def notify_telegram(post=httpx.post) -> None:
     """Asks the web app to send the Telegram alerts that are now due. Never breaks the forecast loop."""
     url, secret = env_value("TG_NOTIFY_URL"), env_value("TELEGRAM_NOTIFY_SECRET")
     if not url or not secret:
-        log("no TG_NOTIFY_URL / TELEGRAM_NOTIFY_SECRET in web/.env.local: skipped Telegram alerts")
+        warn("no TG_NOTIFY_URL / TELEGRAM_NOTIFY_SECRET (environment or web/.env.local): skipped Telegram alerts")
         return
     try:
         res = post(url, headers={"Authorization": f"Bearer {secret}"}, timeout=10)
@@ -422,34 +466,28 @@ DDL = """create table if not exists aq_forecast (
 )"""
 
 
-def upsert(payload: dict) -> None:
-    import psycopg
+def upsert(cur, payload: dict) -> None:
+    """Replace aq_forecast with this payload, inside the caller's transaction."""
     from psycopg.types.json import Jsonb
 
-    url = database_url()
-    if not url:
-        log("no DATABASE_URL in web/.env.local: skipped Neon")
-        return
     gen = payload["generated_at"]
     rows = [("_model", gen, Jsonb({"generated_at": gen, "model": payload["model"]}))]
     rows += [(s["id"], gen, Jsonb(s)) for s in payload["stations"]]
-    with psycopg.connect(url, connect_timeout=20) as conn:
-        with conn.cursor() as cur:
-            cur.execute(DDL)
-            cur.execute("delete from aq_forecast")
-            cur.executemany("insert into aq_forecast (id, generated_at, payload) values (%s, %s, %s)", rows)
-        conn.commit()
-    log(f"Neon: replaced aq_forecast with {len(rows)} rows")
+    cur.execute(DDL)
+    cur.execute("delete from aq_forecast")
+    cur.executemany("insert into aq_forecast (id, generated_at, payload) values (%s, %s, %s)", rows)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--once", action="store_true")
-    ap.add_argument("--no-db", action="store_true")
+    ap.add_argument("--no-db", action="store_true", help="read Neon, run the writes, roll them back")
+    ap.add_argument("--out", type=Path, help="also write the full payload here")
+    ap.add_argument("--fallback", action="store_true", help=f"also write the bundled fallback {OUT.relative_to(ROOT)}")
     args = ap.parse_args()
     while True:
         try:
-            run_once(write_db=not args.no_db)
+            run_once(write_db=not args.no_db, out=args.out, fallback=args.fallback)
         except Exception as e:
             log(f"forecast run failed: {e!r}")
             if args.once:

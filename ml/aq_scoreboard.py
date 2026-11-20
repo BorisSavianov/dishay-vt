@@ -6,7 +6,8 @@
   2025/26 (ml/models/aq_*_eval). The weather is what was forecast at the time (Open-Meteo Previous Runs), never from
   a run newer than the issue time. The archive has no boundary-layer height, so the replay runs twice: without it
   ("none") and with observed ERA5 ("era5"). The payload carries "none" if it still beats CAMS for VT.
-- Live: ml/aq_forecast.py logs every hourly run to data/forecast_log/ and scores it as the readings arrive.
+- Live: ml/aq_forecast.py logs every hourly run to Neon (aq_forecast_log) and scores each hour once its readings
+  arrive (aq_forecast_score).
 
 The result is `model.scoreboard` in the forecast payload (contract/CONTRACT.md)."""
 from __future__ import annotations
@@ -244,50 +245,173 @@ def replay_main() -> None:
     print(f"chosen: {chosen} → {CACHE.relative_to(ROOT)}")
 
 
-# ---------------- Live: log every hourly run, score it as readings arrive ----------------
+# ---------------- Live: log every hourly run in Neon, score it as readings arrive ----------------
+#
+# aq_forecast_log: one row per (run, sensor), the 1–72 h forecasts as arrays (index = horizon; the target hour
+# t = issued_at + (h - 1) h), about 0.5 MB a run; kept LOG_KEEP_DAYS, long enough for every forecast to be scored.
+# aq_forecast_score: per (target hour, horizon), the count and the summed absolute errors of the model, CAMS and
+# persistence. An hour is scored once, in SQL, when its readings arrive, so nothing is downloaded for scoring.
 
-LOG_DIR = ROOT / "data" / "forecast_log"
+LOG_DIR = ROOT / "data" / "forecast_log"   # the old parquet log; backfill_log() moves it into Neon
 LOG_COLS = ["issued_at", "sensor_id", "t", "horizon_h", "pm25", "pm10", "cams_pm25", "persistence_pm25"]
+HORIZON = 72
+LOG_KEEP_DAYS = 4
+LOG_DDL = [
+    """create table if not exists aq_forecast_log (
+  issued_at timestamptz not null,
+  sensor_id integer not null,
+  pm25 real[] not null,
+  pm10 real[] not null,
+  cams_pm25 real[] not null,
+  persistence_pm25 real,
+  primary key (issued_at, sensor_id)
+)""",
+    """create table if not exists aq_forecast_score (
+  t timestamptz not null,
+  horizon_h smallint not null,
+  n integer not null,
+  abs_model double precision not null,
+  abs_cams double precision not null,
+  abs_persistence double precision not null,
+  first_issued timestamptz not null,
+  primary key (t, horizon_h)
+)"""]
 
 
-def log_issued(issued_at: pd.Timestamp, rows: pd.DataFrame, log_dir: Path = LOG_DIR) -> Path:
-    """One parquet per run, named by the issue hour in UTC."""
-    log_dir.mkdir(parents=True, exist_ok=True)
-    path = log_dir / f"issued-{pd.Timestamp(issued_at).tz_convert('UTC'):%Y%m%d-%H}.parquet"
-    rows[LOG_COLS].to_parquet(path, index=False)
-    return path
+def ensure_log_tables(cur) -> None:
+    for stmt in LOG_DDL:
+        cur.execute(stmt)
 
 
-def read_log(log_dir: Path = LOG_DIR) -> pd.DataFrame:
-    files = sorted(log_dir.glob("issued-*.parquet")) if log_dir.exists() else []
-    if not files:
-        return pd.DataFrame(columns=LOG_COLS)
-    return pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+def _f(x):
+    return None if x is None or x != x else float(x)
 
 
-def live_score(log: pd.DataFrame, obs25: np.ndarray, times: pd.DatetimeIndex, sensor_ids: np.ndarray,
+def log_arrays(rows: pd.DataFrame) -> list[tuple]:
+    """Long rows (LOG_COLS, one per sensor and horizon) → (issued_at, sensor_id, pm25[], pm10[], cams_pm25[],
+    persistence_pm25) per (run, sensor). Array k (0-based) is horizon k + 1; missing horizons are NULL."""
+    out = []
+    for (issued, sid), g in rows.groupby(["issued_at", "sensor_id"], sort=True):
+        h = g["horizon_h"].to_numpy(dtype=int)
+        arr = {c: [None] * HORIZON for c in ("pm25", "pm10", "cams_pm25")}
+        for c in arr:
+            for k, v in zip(h, g[c].to_numpy(dtype=float)):
+                if 1 <= k <= HORIZON:
+                    arr[c][k - 1] = _f(v)
+        out.append((pd.Timestamp(issued).tz_convert("UTC").to_pydatetime(), int(sid), arr["pm25"], arr["pm10"],
+                    arr["cams_pm25"], _f(g["persistence_pm25"].iloc[0])))
+    return out
+
+
+INSERT_LOG = ("insert into aq_forecast_log (issued_at, sensor_id, pm25, pm10, cams_pm25, persistence_pm25) "
+              "values (%s, %s, %s, %s, %s, %s) on conflict (issued_at, sensor_id) do ")
+
+
+def log_issued(cur, issued_at: pd.Timestamp, rows: pd.DataFrame) -> int:
+    """This run's 1–72 h forecasts into aq_forecast_log (a rerun of the same issue hour replaces it); runs older
+    than LOG_KEEP_DAYS are dropped."""
+    data = log_arrays(rows[LOG_COLS])
+    cur.executemany(INSERT_LOG + "update set pm25 = excluded.pm25, pm10 = excluded.pm10, "
+                    "cams_pm25 = excluded.cams_pm25, persistence_pm25 = excluded.persistence_pm25", data)
+    cutoff = pd.Timestamp(issued_at).tz_convert("UTC") - pd.Timedelta(days=LOG_KEEP_DAYS)
+    cur.execute("delete from aq_forecast_log where issued_at < %s", (cutoff.to_pydatetime(),))
+    return len(data)
+
+
+def read_log(cur, t_from: pd.Timestamp | None = None, t_to: pd.Timestamp | None = None) -> pd.DataFrame:
+    """The log in long form (LOG_COLS) for target hours in [t_from, t_to] (UTC; either end may be open)."""
+    a = pd.Timestamp(t_from if t_from is not None else "2000-01-01T00:00Z").to_pydatetime()
+    b = pd.Timestamp(t_to if t_to is not None else "2100-01-01T00:00Z").to_pydatetime()
+    cur.execute(
+        "select l.issued_at, l.sensor_id, l.issued_at + (h - 1) * interval '1 hour' as t, h as horizon_h, "
+        "l.pm25[h], l.pm10[h], l.cams_pm25[h], l.persistence_pm25 "
+        "from aq_forecast_log l cross join generate_series(1, %s) h "
+        "where l.issued_at > %s - interval '72 hours' and l.issued_at <= %s "
+        "and l.issued_at + (h - 1) * interval '1 hour' between %s and %s", (HORIZON, a, b, a, b))
+    df = pd.DataFrame(cur.fetchall(), columns=LOG_COLS)
+    for c in ("issued_at", "t"):
+        df[c] = pd.to_datetime(df[c], utc=True)
+    for c in ("pm25", "pm10", "cams_pm25", "persistence_pm25"):
+        df[c] = pd.to_numeric(df[c], errors="coerce").astype(float)
+    return df
+
+
+SCORE_SQL = """
+with obs(sensor_id, t, pm25) as (
+  select * from unnest(%(sid)s::int[], %(t)s::timestamptz[], %(obs)s::real[])
+), pairs as (
+  select o.t, (extract(epoch from o.t - l.issued_at) / 3600)::int + 1 as h, l.issued_at, o.pm25 as obs,
+         l.pm25 as f_model, l.cams_pm25 as f_cams, l.persistence_pm25
+  from obs o join aq_forecast_log l
+    on l.sensor_id = o.sensor_id and l.issued_at <= o.t and l.issued_at > o.t - interval '72 hours'
+)
+insert into aq_forecast_score (t, horizon_h, n, abs_model, abs_cams, abs_persistence, first_issued)
+select t, h, count(*), sum(abs(f_model[h] - obs)), sum(abs(f_cams[h] - obs)), sum(abs(persistence_pm25 - obs)),
+       min(issued_at)
+from pairs
+where f_model[h] is not null and f_cams[h] is not null and persistence_pm25 is not null
+group by t, h
+on conflict (t, horizon_h) do nothing
+"""
+
+
+def new_observations(obs25: np.ndarray, times: pd.DatetimeIndex, sensor_ids: np.ndarray, after, upto) -> dict:
+    """The panel's cleaned, humidity-corrected PM2.5 for the hours in (after, upto], as SQL arrays."""
+    times = pd.DatetimeIndex(times)
+    sel = times <= pd.Timestamp(upto).tz_convert("UTC")
+    if after is not None:
+        sel &= times > pd.Timestamp(after).tz_convert("UTC")
+    ti = np.flatnonzero(sel)
+    sub = obs25[ti]
+    r, c = np.nonzero(~np.isnan(sub))
+    return {"sid": [int(x) for x in np.asarray(sensor_ids)[c]], "t": [times[ti[k]].to_pydatetime() for k in r],
+            "obs": [float(x) for x in sub[r, c]]}
+
+
+def live_block(row) -> dict | None:
+    """(first_issued, hours, min_h, max_h, n, abs_model, abs_cams, abs_persistence) → the contract's `live`."""
+    since, hours, h0, h1, n, a_m, a_c, a_p = row
+    if not n:
+        return None
+    return {"since": pd.Timestamp(since).tz_convert(TZ).isoformat(timespec="seconds"), "checked_hours": int(hours),
+            "horizons": f"{int(h0)}–{int(h1)} h",
+            "mae_pm25": {"model": round(a_m / n, 1), "cams": round(a_c / n, 1), "persistence": round(a_p / n, 1)}}
+
+
+def live_score(cur, obs25: np.ndarray, times: pd.DatetimeIndex, sensor_ids: np.ndarray,
                upto: pd.Timestamp) -> dict | None:
-    """Score logged forecasts whose hour has passed against the panel's cleaned, humidity-corrected PM2.5.
+    """Score the logged forecasts for the hours whose readings arrived since the last scored hour (up to `upto`,
+    the last complete hour) against the panel's PM2.5, then return the live score over every hour scored so far.
     None until at least one hour has been scored."""
-    if log.empty:
-        return None
-    t = pd.to_datetime(log["t"], utc=True)
-    log = log[t <= pd.Timestamp(upto).tz_convert("UTC")].copy()
-    if log.empty:
-        return None
-    ti = pd.DatetimeIndex(times).get_indexer(pd.to_datetime(log["t"], utc=True))
-    si = pd.Index(np.asarray(sensor_ids)).get_indexer(log["sensor_id"])
-    ok = (ti >= 0) & (si >= 0)
-    log = log[ok].copy()
-    log["obs_pm25"] = obs25[ti[ok], si[ok]].astype(float)
-    rows = log.rename(columns={"pm25": "model_pm25"})
-    scored = rows[rows[["obs_pm25", *_TRIO.values()]].notna().all(axis=1)]
-    if scored.empty:
-        return None
-    since = pd.to_datetime(rows["issued_at"], utc=True).min().tz_convert(TZ)
-    return {"since": since.isoformat(timespec="seconds"), "checked_hours": int(scored["t"].nunique()),
-            "horizons": f"{int(scored['horizon_h'].min())}–{int(scored['horizon_h'].max())} h",
-            "mae_pm25": mae(scored)}
+    cur.execute("select max(t) from aq_forecast_score")
+    after = cur.fetchone()[0]
+    if after is None:
+        cur.execute("select min(issued_at) - interval '1 hour' from aq_forecast_log")
+        after = cur.fetchone()[0]
+    if after is not None:
+        obs = new_observations(obs25, times, sensor_ids, after, upto)
+        if obs["sid"]:
+            cur.execute(SCORE_SQL, obs)
+    cur.execute("select min(first_issued), count(distinct t), min(horizon_h), max(horizon_h), sum(n), "
+                "sum(abs_model), sum(abs_cams), sum(abs_persistence) from aq_forecast_score")
+    return live_block(cur.fetchone())
+
+
+def backfill_log(cur, log_dir: Path = LOG_DIR) -> int:
+    """Move the old parquet log (data/forecast_log/issued-*.parquet) into aq_forecast_log. Safe to run again."""
+    files = sorted(log_dir.glob("issued-*.parquet")) if log_dir.exists() else []
+    n = 0
+    for f in files:
+        rows = pd.read_parquet(f)
+        rows["issued_at"] = pd.to_datetime(rows["issued_at"], utc=True)
+        rows["t"] = pd.to_datetime(rows["t"], utc=True)
+        lag = (rows["t"] - rows["issued_at"]) / pd.Timedelta(hours=1) + 1
+        if not (lag == rows["horizon_h"]).all():
+            raise ValueError(f"{f.name}: t != issued_at + (horizon - 1) h")
+        data = log_arrays(rows[LOG_COLS])
+        cur.executemany(INSERT_LOG + "nothing", data)
+        n += len(data)
+    return n
 
 
 def scoreboard_block(live: dict | None, cache: Path = CACHE) -> dict | None:

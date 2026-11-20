@@ -37,6 +37,7 @@ const bg = {
   'tab.health': 'Здраве',
   'tab.ai': 'AI',
   'tab.data': 'Данни',
+  'tab.why': 'Защо',
 
   // Dashboard
   'dash.title': 'Велико Търново',
@@ -221,6 +222,7 @@ const en: Record<MessageKey, string> = {
   'tab.health': 'Health',
   'tab.ai': 'AI',
   'tab.data': 'Data',
+  'tab.why': 'Why',
 
   // Dashboard
   'dash.title': 'Veliko Tarnovo',

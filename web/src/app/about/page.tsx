@@ -4,10 +4,14 @@ import { LevelChip } from '@/components/aq/Level';
 import { AppShell } from '@/components/shell/AppShell';
 import { Icon } from '@/components/shell/Icon';
 import { fmtPm } from '@/lib/aq/format';
+import { loadForecast } from '@/lib/aq/load';
+import { fmtNum } from '@/lib/format';
 import { PM10_BANDS, PM25_BANDS } from '@/lib/aq/levels';
 import { air, type AirKey } from '@/lib/aq/strings';
 import { t } from '@/lib/i18n';
 import { langOf, withLang, type SearchParams } from '@/lib/page';
+
+export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
   const lang = langOf(await searchParams);
@@ -20,6 +24,8 @@ export default async function About({ searchParams }: { searchParams: SearchPara
   const lang = langOf(await searchParams);
   const tr = (key: AirKey, vars?: Record<string, string | number>) => air(lang, key, vars);
   const pm = (n: number) => fmtPm(lang, n);
+  const { forecast } = await loadForecast();
+  const f1 = forecast.model.exceedance_f1;
   const edge = (bands: readonly number[], i: number) =>
     i < bands.length ? pm(bands[i]!) : tr('m.levels.above', { n: pm(bands[bands.length - 1]!) });
 
@@ -44,12 +50,17 @@ export default async function About({ searchParams }: { searchParams: SearchPara
           </ul>
           <h2>{tr('m.test.title')}</h2>
           <p>{tr('m.test.body')}</p>
+          {f1 && <p>{tr('m.f1', { model: fmtNum(lang, f1.model, 2), cams: fmtNum(lang, f1.cams, 2) })}</p>}
           <p>
             <Link className="btn" href={withLang('/why', lang)}>
               {tr('m.test.link')}
               <Icon name="arrow" />
             </Link>
           </p>
+          <h2>{tr('m.live.title')}</h2>
+          <p>{tr('m.live.body')}</p>
+          <h2>{tr('m.cams.title')}</h2>
+          <p>{tr('m.cams.body')}</p>
         </article>
 
         <div className="stack">
@@ -81,6 +92,11 @@ export default async function About({ searchParams }: { searchParams: SearchPara
             <p>{tr('m.alerts.body')}</p>
           </section>
 
+          <section className="card prose" aria-labelledby="src-method">
+            <h2 id="src-method">{tr('m.src.title')}</h2>
+            <p>{tr('m.src.body')}</p>
+          </section>
+
           <section className="card prose" aria-labelledby="ai-title">
             <h2 id="ai-title">{tr('m.ai.title')}</h2>
             <p>{tr('m.ai.body')}</p>
@@ -91,6 +107,7 @@ export default async function About({ searchParams }: { searchParams: SearchPara
               <li>{tr('m.limits.3')}</li>
               <li>{tr('m.limits.4')}</li>
               <li>{tr('m.limits.5')}</li>
+              <li>{tr('m.limits.6')}</li>
             </ul>
           </section>
         </div>
