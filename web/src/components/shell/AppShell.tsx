@@ -10,6 +10,7 @@ import { ExportMenu } from './ExportMenu';
 import { Backdrop } from './Backdrop';
 import { BrandMark, Icon, type IconName } from './Icon';
 import { DocLang, LangSwitch } from './LangSwitch';
+import { PageMotion } from './PageMotion';
 import { ThemeToggle } from './ThemeToggle';
 import type { NavId } from '@/lib/look';
 
@@ -82,6 +83,7 @@ export function AppShell({
   return (
     <div className="app">
       <Backdrop active={active} />
+      <PageMotion />
       <DocLang lang={lang} />
       <a className="skip-link" href="#main">
         {tr('skip.link')}
