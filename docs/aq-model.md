@@ -59,14 +59,36 @@ Given the latest readings of a citizen PM sensor, its neighbours, the weather fo
 
 ## Live
 
-`ml/aq_forecast.py` runs every hour on Teodor's PC. It does the following:
-1. Takes the archive up to yesterday, plus the 5-minute live collector for today.
-2. Fetches the Open-Meteo and CAMS forecasts for every 0.25° cell, cached for 3 h.
-3. Predicts 1–96 h for every station. Hours past 72 use the 72 h model at its limit, and only the daily cards use them.
+`ml/aq_forecast.py` runs every hour on GitHub Actions (`.github/workflows/forecast.yml`, cron `7 * * * *`, CPU runner), not on anyone's PC. Each run:
+1. Downloads the models and sensor lists from the GitHub Release `models-latest` (`ml/aq_release.py`).
+2. Fetches sensor.community's 1-hour averages (`data.1h.json`) and files them as the last complete hour. It reads the 7 days before from Neon `aq_live_hourly` (`ml/aq_live.py`, kept 8 days). Neither the archive nor a collector is read at inference.
+   - `data.1h.json` has no reading count, so each 1-hour mean gets `n = 24`, the archive's median readings per hour. `build_panel` then counts it as a valid hour (it needs ≥ 6), so the uptime rule works as it does on the archive.
+   - It is a rolling 60 minutes, not a clock hour. A run that starts at :20 averages about :20 to :20, a 20-minute shift.
+3. Fetches the Open-Meteo and CAMS forecasts for every 0.25° cell, cached for 3 h with `actions/cache`. Shared runner IPs get 429s: a run waits up to three times, then serves the cached copy if it is under 24 h old, and fails only without one.
+4. Predicts 1–96 h for every station on CPU (XGBoost loads the CUDA-trained models with `device=cpu`). Hours past 72 use the 72 h model at its limit, and only the daily cards use them.
    - The CAMS Europe forecast ends about 63 h out. Past its last hour, the model's CAMS inputs repeat CAMS's last forecast day: as NaN, they made the forecast jump from 2.2 to 8.3 µg/m³.
    - The payload's `cams_pm25` stays the real value, so the dashed CAMS line on the chart stops where CAMS stops.
-4. Builds SHAP reasons per day from the physical drivers only.
-5. Writes Neon (`aq_forecast`) in one transaction, and a slim fallback JSON.
+5. Builds SHAP reasons per day from the physical drivers only.
+6. Writes Neon in one transaction: this hour's readings, `aq_forecast` (replaced), the run's log (`aq_forecast_log`, one row per station with 72-hour arrays, kept 4 days), and the score of every hour that just got readings (`aq_forecast_score`, scored in SQL). If anything fails, the job exits non-zero and Neon keeps the previous forecast. Then it asks the web app to send due Telegram alerts.
+
+`web/src/data/aq_forecast.json` (the bundled fallback) is no longer rewritten every hour. Refresh it by hand: `uv run --group ml python -u -m ml.aq_forecast --once --no-db --fallback`.
+
+### Run book
+
+- **Run time:** a job takes about 2–2½ min on `ubuntu-latest` (4 vCPU, measured 20 Nov 2026). The forecast step is about 2 min, of which SHAP on CPU is about 1¾ min; setup and the 105 MB model download take seconds. The timeout is 20 min. Minutes are free for this public repo. GitHub starts the `:07` cron late, often by 10–30 min.
+- **Dry run** (reads Neon, runs every write, then rolls back): Actions → forecast → Run workflow with `dry_run` ticked. Locally: `uv run --group ml python -u -m ml.aq_forecast --once --no-db --out forecast.json`, then `uv run --group ml python -m ml.aq_contract forecast.json`.
+- **Force a live run:** Run workflow with `dry_run` unticked.
+- **Switch:** scheduled runs write only while the repo variable `FORECAST_LIVE` is `true`. To pause the cloud writer: `gh variable set FORECAST_LIVE --body false -R BorisSavianov/dishay-vt`.
+- **Config:** the job reads the repo secrets `DATABASE_URL`, `TG_NOTIFY_URL` and `TELEGRAM_NOTIFY_SECRET`. Locally the same names fall back to `web/.env.local`.
+- **Check the 1-hour means:** `uv run --group ml python -u -m ml.aq_live --check-archive 2026-11-20` compares the stored hours of a past UTC day with the archive's hourly means. The archive publishes a day after it ends.
+
+### Retrain and upload (Teodor's PC, RTX 4070)
+
+1. Fetch new archive days and weather as usual (`ml.aq_fetch`, `ml.aq_weather`), then retrain on the GPU, e.g. `uv run --group ml python -u -m ml.aq_train --algo xgb --name xgb-v3 --final`. This writes `ml/models/aq_*` and `aq_meta.json`.
+2. Optional: `uv run --group ml python -u -m ml.aq_scoreboard --replay` and `ml.aq_sources` if the replay or the source shares should change.
+3. Check locally on CPU: `uv run --group ml python -u -m ml.aq_forecast --once --no-db --out forecast.json`.
+4. Upload: `uv run --group ml python -u -m ml.aq_release upload`. This replaces the `models-latest` assets: the four models of `aq_meta.json`'s algo, `aq_meta.json`, `aq_sources.json`, `sensors_bg.json`, `names.json`, `cells.json`, `elevation.json` and `scoreboard_replay.json`.
+5. The next hourly run picks them up. To see it at once, start a manual run.
 
 ## Limits (say them out loud)
 

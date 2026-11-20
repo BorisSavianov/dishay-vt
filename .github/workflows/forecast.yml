@@ -11,8 +11,6 @@ on:
         description: "--no-db: read Neon and run the writes, then roll them back"
         type: boolean
         default: true
-  push:   # TEMPORARY: test runs on the branch before merge (always dry); removed before merging
-    branches: [teodor/aq-ml]
 
 concurrency:
   group: forecast
