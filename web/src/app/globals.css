@@ -2031,3 +2031,42 @@ button.legend-row[aria-pressed='false'] {
     margin-top: 6px;
   }
 }
+
+/* Live check (scoreboard) */
+.scoreboard {
+  margin-bottom: 18px;
+}
+
+.scoreboard .eyebrow {
+  margin-bottom: 6px;
+}
+
+.sb-headline {
+  max-width: 34ch;
+  font-size: clamp(1.35rem, 2.6vw, 1.9rem);
+  line-height: 1.25;
+}
+
+.sb-live {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--pos-soft);
+  color: var(--pos);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.sb-row {
+  margin: 18px 0 0;
+}
+
+.is-observed .lc-line {
+  stroke: var(--fg);
+}
+.is-observed .lc-dot,
+.is-observed .lc-key {
+  fill: var(--fg);
+  background: var(--fg);
+}

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { EpisodeChart } from '@/components/aq/EpisodeChart';
 import { LevelChip } from '@/components/aq/Level';
 import { LineChart } from '@/components/aq/LineChart';
+import { ScoreboardSection } from '@/components/aq/ScoreboardSection';
 import { dayBefore, readEpisode } from '@/lib/aq/episode';
 import { PM25_BANDS } from '@/lib/aq/levels';
 import { Kpi } from '@/components/Kpi';
@@ -9,6 +10,7 @@ import { AppShell } from '@/components/shell/AppShell';
 import deaths from '@/data/pm25_deaths_bg_eu.json';
 import { dayLabel, fmtPm } from '@/lib/aq/format';
 import { loadForecast } from '@/lib/aq/load';
+import { scoreboardView } from '@/lib/aq/scoreboard';
 import { air, type AirKey } from '@/lib/aq/strings';
 import type { AqMae } from '@/lib/aq/types';
 import { coveragePct, maeBars, pctBetter } from '@/lib/aq/why';
@@ -51,6 +53,7 @@ export default async function Why({ searchParams }: { searchParams: SearchParams
   const euSame = bgLast ? eurostat.eu.find((p) => p.year === bgLast.year) : undefined;
   const years = eurostat.bg.map((p) => p.year).filter((y) => eurostat.eu.some((p) => p.year === y));
   const episode = readEpisode();
+  const sbView = scoreboardView(m.scoreboard, lang);
   const ep1 = episode ? dayBefore(episode) : null;
   const score = episode?.score;
 
@@ -84,6 +87,10 @@ export default async function Why({ searchParams }: { searchParams: SearchParams
               {tr('why.kpi.rows.sub', { sensors: fmtInt(lang, m.sensors) })}
             </Kpi>
           </section>
+
+          {sbView && m.scoreboard?.replay && (
+            <ScoreboardSection view={sbView} from={m.scoreboard.replay.from} to={m.scoreboard.replay.to} lang={lang} />
+          )}
 
           <div className="row-split">
             <section className="card" aria-labelledby="mae-title">
