@@ -140,3 +140,106 @@ def test_apply_weather_blh_none(toy_panel):
     inside = (toy_panel.times >= start) & (toy_panel.times <= end)
     assert np.isnan(blh[inside]).all()
     assert not np.isnan(blh[~inside]).any()
+
+
+# ---------------- Task 3: replay scoring ----------------
+
+from ml.aq_scoreboard import mae, pick_blh, run_block, vt_days
+
+
+def rows_for(day: str, hours: int, obs_hours: int, vt: bool = True, sensor: int = 1, obs: float = 20.0) -> pd.DataFrame:
+    t = pd.date_range(pd.Timestamp(day, tz=TZ), periods=hours, freq="h")
+    o = np.where(np.arange(hours) < obs_hours, obs, np.nan)
+    return pd.DataFrame({"date": day, "sensor": sensor, "t": t, "vt": vt,
+                         "model_pm25": 18.0, "model_pm10": 30.0, "cams_pm25": 12.0, "cams_pm10": 20.0,
+                         "persistence_pm25": 25.0, "obs_pm25": o, "obs_pm10": o * 1.6})
+
+
+def test_mae_drops_rows_missing_any_input():
+    rows = pd.DataFrame({"obs_pm25": [10, 20, np.nan], "model_pm25": [12, 18, 5],
+                         "cams_pm25": [15, np.nan, 5], "persistence_pm25": [11, 25, 5]})
+    assert mae(rows) == {"model": 2.0, "cams": 5.0, "persistence": 1.0}
+
+
+def test_vt_days_needs_18_hours():
+    rows = pd.concat([rows_for("2026-11-02", 24, 24), rows_for("2026-11-03", 24, 17),
+                      rows_for("2026-11-02", 24, 24, vt=False, sensor=2, obs=90.0)], ignore_index=True)
+    days = vt_days(rows)
+    assert [r["date"] for r in days] == ["2026-11-02"]
+    d = days[0]
+    assert d["observed_pm10"] == 32.0 and d["model_pm10"] == 30.0 and d["cams_pm10"] == 20.0
+    assert d["observed_level"] == 3 and d["model_level"] == 3  # PM2.5 20 / 18 → band 3
+
+
+def test_pick_blh_prefers_strict_when_it_wins():
+    win = {"mae_pm25_next_day": {"vt": {"model": 3.0, "cams": 6.0}}}
+    lose = {"mae_pm25_next_day": {"vt": {"model": 6.5, "cams": 6.0}}}
+    assert pick_blh({"none": win, "era5": win}) == "none"
+    assert pick_blh({"none": lose, "era5": win}) == "era5"
+
+
+def test_run_block_matches_contract():
+    rows = pd.concat([rows_for("2026-11-02", 24, 24), rows_for("2026-11-03", 24, 20),
+                      rows_for("2026-11-02", 24, 24, vt=False, sensor=2, obs=30.0)], ignore_index=True)
+    block = run_block(rows, "none")
+    assert block["from"] == "2026-11-02" and block["to"] == "2026-11-03" and block["days"] == 2
+    assert block["blh"] == "none" and block["weather"] == "forecast" and block["issued_local"] == "12:00"
+    assert block["mae_pm25_next_day"]["vt"] == {"model": 2.0, "cams": 8.0, "persistence": 5.0}
+    assert validate(payload_with({"updated_at": NOW_ISO, "replay": block})) == []
+
+
+# ---------------- Task 4: live log and score ----------------
+
+import json
+
+from ml.aq_scoreboard import live_score, log_issued, read_log, scoreboard_block
+
+TIMES = pd.date_range("2026-11-20T10:00Z", periods=7, freq="h")   # 10:00Z .. 16:00Z
+IDS = np.array([101])
+OBS = np.full((7, 1), 10.0, dtype=np.float32)
+
+
+def ts(hhmm: str) -> pd.Timestamp:
+    return pd.Timestamp(f"2026-11-20T{hhmm}Z")
+
+
+def log_rows(issued: str, targets: list[str], sensor: int = 101) -> pd.DataFrame:
+    i = ts(issued)
+    t = [ts(x) for x in targets]
+    return pd.DataFrame({"issued_at": i, "sensor_id": sensor, "t": t,
+                         "horizon_h": [int((x - i) / pd.Timedelta(hours=1)) for x in t],
+                         "pm25": 11.0, "pm10": 18.0, "cams_pm25": 14.0, "persistence_pm25": 12.0})
+
+
+def test_live_score_none_before_any_hour_passes():
+    assert live_score(log_rows("12:00", ["13:00"]), OBS, TIMES, IDS, upto=ts("12:00")) is None
+
+
+def test_live_score_counts_hours_and_horizons():
+    log = pd.concat([log_rows("12:00", ["13:00", "14:00", "15:00", "16:00"]), log_rows("13:00", ["14:00", "15:00"]),
+                     log_rows("12:00", ["13:00"], sensor=999)], ignore_index=True)
+    s = live_score(log, OBS, TIMES, IDS, upto=ts("15:00"))
+    assert s["checked_hours"] == 3 and s["horizons"] == "1–3 h"
+    assert s["mae_pm25"] == {"model": 1.0, "cams": 4.0, "persistence": 2.0}
+    assert s["since"] == "2026-11-20T14:00:00+02:00"
+
+
+def test_log_roundtrip(tmp_path):
+    rows = log_rows("12:00", ["13:00", "14:00"])
+    a = log_issued(ts("12:00"), rows, tmp_path)
+    log_issued(ts("13:00"), rows, tmp_path)
+    assert a.name == "issued-20261120-12.parquet"
+    assert len(read_log(tmp_path)) == 2 * len(rows)
+    assert read_log(tmp_path / "missing").empty
+
+
+def test_scoreboard_block_absent_without_inputs(tmp_path):
+    assert scoreboard_block(None, cache=tmp_path / "missing.json") is None
+
+
+def test_scoreboard_block_uses_chosen_run(tmp_path):
+    cache = tmp_path / "replay.json"
+    cache.write_text(json.dumps({"chosen": "era5", "runs": {"none": {"blh": "none"}, "era5": EXAMPLE["replay"] | {"blh": "era5"}}}))
+    b = scoreboard_block(None, cache=cache)
+    assert b["replay"]["blh"] == "era5" and "live" not in b and b["updated_at"].endswith("+02:00")
+    assert validate(payload_with(b)) == []

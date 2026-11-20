@@ -26,6 +26,7 @@ from ml.aq_labels import reason
 from ml.aq_levels import EU_PM10_DAILY_LIMIT, level_of
 from ml.aq_models import Model
 from ml.aq_train import predict_all
+from ml.aq_scoreboard import live_score, log_issued, read_log, scoreboard_block
 
 ROOT = Path(__file__).resolve().parents[1]
 MODELS = ROOT / "ml" / "models"
@@ -216,6 +217,16 @@ def run_once(write_db: bool = True) -> dict:
         X.loc[past, keep_cols] = X_true.loc[past, keep_cols]
     P = predict_all(models, X)
     p25, p10, lo, hi = P["pm25"], P["pm10"], P["lo"], P["hi"]
+    try:  # „Проверка на живо“: log this run's 1–72 h forecasts; never fail the forecast over it
+        keep = hh <= HOURS_OUT
+        T, cell = ii[keep] + hh[keep], panel.sensor_cell[ss[keep]]
+        log_issued(i_time + pd.Timedelta(hours=1), pd.DataFrame({
+            "issued_at": i_time + pd.Timedelta(hours=1), "sensor_id": panel.sensors["id"].to_numpy()[ss[keep]],
+            "t": panel.times[T], "horizon_h": hh[keep], "pm25": p25[keep], "pm10": p10[keep],
+            "cams_pm25": np.where(cell >= 0, panel.cams25[T, np.maximum(cell, 0)], np.nan),
+            "persistence_pm25": panel.pm25[ii[keep], ss[keep]]}))
+    except Exception as e:
+        log(f"forecast log failed: {e!r}")
     why = explain(models["pm25"], X, P["log25"], models["_space"])
 
     names = json.loads((RAW / "names.json").read_text(encoding="utf-8")) if (RAW / "names.json").exists() else {}
@@ -280,6 +291,15 @@ def run_once(write_db: bool = True) -> dict:
     ep = episode_block()
     if ep:
         model_block["episode"] = ep
+    try:
+        live = live_score(read_log(), panel.pm25, panel.times, panel.sensors["id"].to_numpy(), i_time)
+        sb = scoreboard_block(live)
+        if sb:
+            model_block["scoreboard"] = sb
+            if live:
+                log(f"live check: {live['checked_hours']} h ({live['horizons']}), MAE {live['mae_pm25']}")
+    except Exception as e:
+        log(f"scoreboard failed: {e!r}")
     payload = {"generated_at": generated, "model": model_block, "stations": stations}
     errors = validate(payload)
     if errors:
