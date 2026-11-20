@@ -123,7 +123,17 @@ Written by `ml/aq_forecast.py` on Teodor's PC every hour, upserted into Neon and
 - `level` is the EEA EAQI 1..6 of the daily means: the worse of the PM2.5 and PM10 bands. Band edges: `mobile/src/aq/levels.ts` (`PM25_BANDS`, `PM10_BANDS`); `ml/aq_levels.py` mirrors them and a test fails if they drift. The web should use the same numbers.
 - `exceeds_eu_limit` is `pm10_mean > 50`.
 - `reasons`: up to 3 per day, largest `|impact|` first. `impact` is the µg/m³ the feature group adds (positive) or removes (negative) from the day's PM2.5. `feature` is one of `pbl_height`, `wind_speed`, `temp`, `rh`, `precip`, `persistence`, `neighbours`, `cams`, `calendar`. `label_en` is optional.
-- Ids: `sc-<sensor.community sensor id>`. `featured` marks the Veliko Tarnovo stations shown first.
+- Ids: `sc-<sensor.community sensor id>`. `featured` marks the Veliko Tarnovo stations shown first (within 10 km of the centre).
+- Levels: the EEA defines the index on hourly values (airindex.eea.europa.eu, 2024 revision); `daily[].level` applies the same bands to the daily means.
+
+Optional `model` fields for the „Защо?“ page (all measured on the winter 2025/26 holdout, PM2.5, µg/m³):
+
+```jsonc
+"mae_vt": { "model": 6.3, "cams": 16.5, "persistence": 8.0 },            // Veliko Tarnovo stations only, 24 h
+"mae_by_horizon": [ { "h": 1, "model": 1.6, "persistence": 1.5, "cams": 11.9 }, ... ],  // h = 1,3,6,12,24,36,48,72
+"importance": [ { "group": "persistence", "label_bg": "замърсяване в последните часове",
+                  "label_en": "pollution in the last hours", "share": 0.38 }, ... ]  // shares sum to 1, largest first
+```
 
 ### Neon table
 

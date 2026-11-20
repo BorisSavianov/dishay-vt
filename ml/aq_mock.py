@@ -12,7 +12,7 @@ import math
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from ml.aq_labels import reason
+from ml.aq_labels import GROUP_NAMES, reason
 from ml.aq_levels import EU_PM10_DAILY_LIMIT, level_of
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -104,6 +104,17 @@ def build(now: dt.datetime) -> dict:
             "holdout": "winter 2025/26",
             "mae": {"model": 6.1, "cams": 9.8, "persistence": 8.4},
             "exceedance_f1": {"model": 0.78, "cams": 0.55},
+            "mae_vt": {"model": 6.3, "cams": 16.5, "persistence": 8.0},
+            "mae_by_horizon": [
+                {"h": h, "model": round(3.0 + 0.07 * h, 1), "persistence": round(1.6 + 0.12 * h, 1), "cams": 15.5}
+                for h in (1, 3, 6, 12, 24, 36, 48, 72)
+            ],
+            "importance": [
+                {"group": g, "label_bg": GROUP_NAMES[g][0], "label_en": GROUP_NAMES[g][1], "share": s}
+                for g, s in (("persistence", 0.38), ("pbl_height", 0.14), ("rh", 0.12), ("cams", 0.1),
+                             ("temp", 0.09), ("calendar", 0.08), ("wind_speed", 0.05), ("neighbours", 0.03),
+                             ("precip", 0.01))
+            ],
         },
         "stations": stations,
     }

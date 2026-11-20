@@ -30,3 +30,17 @@ REASONS_DOWN: dict[str, tuple[str, str]] = {
 def reason(group: str, impact: float) -> dict:
     bg, en = (REASONS if impact >= 0 else REASONS_DOWN)[group]
     return {"feature": group, "label_bg": bg, "label_en": en, "impact": round(float(impact), 1)}
+
+# Neutral names for the feature groups, for the importance chart ("what the model looks at").
+GROUP_NAMES: dict[str, tuple[str, str]] = {
+    "persistence": ("замърсяване в последните часове", "pollution in the last hours"),
+    "neighbours": ("съседни сензори", "nearby sensors"),
+    "pbl_height": ("слой на смесване (инверсия)", "mixing layer (inversion)"),
+    "wind_speed": ("вятър", "wind"),
+    "temp": ("температура", "temperature"),
+    "rh": ("влажност", "humidity"),
+    "precip": ("валежи", "rain"),
+    "cams": ("прогноза CAMS", "CAMS forecast"),
+    "calendar": ("час, ден, сезон", "hour, day, season"),
+    "static": ("място на сензора", "sensor location"),
+}
