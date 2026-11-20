@@ -49,8 +49,9 @@ export function ForecastChart({ hourly, lang, labels }: { hourly: AqHour[]; lang
 
   const value = (h: AqHour) => (pm === 'pm25' ? h.pm25 : h.pm10);
   const hasBand = pm === 'pm25' && hourly.every((h) => h.pm25_lo != null && h.pm25_hi != null);
-  const hasCams = pm === 'pm25' && hourly.every((h) => h.cams_pm25 != null);
-  const peak = Math.max(...hourly.map((h) => Math.max(value(h), hasBand ? h.pm25_hi! : 0, hasCams ? h.cams_pm25! : 0)));
+  // CAMS forecasts fewer hours ahead than we do: draw it where it has values, in unbroken runs.
+  const hasCams = pm === 'pm25' && hourly.filter((h) => h.cams_pm25 != null).length > 1;
+  const peak = Math.max(...hourly.map((h) => Math.max(value(h), hasBand ? h.pm25_hi! : 0, hasCams ? (h.cams_pm25 ?? 0) : 0)));
   const ticks = niceTicks(0, Math.max(peak * 1.08, 10), 5);
   const yMax = ticks[ticks.length - 1] ?? 1;
   const innerW = width - M.left - M.right;
@@ -72,7 +73,20 @@ export function ForecastChart({ hourly, lang, labels }: { hourly: AqHour[]; lang
         .map((p) => `L${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
         .join(' ')} Z`
     : null;
-  const cams = hasCams ? linePath(hourly.map((h, i) => ({ x: x(i), y: y(h.cams_pm25!) }))) : null;
+  const camsRuns: { x: number; y: number }[][] = [];
+  if (hasCams) {
+    let run: { x: number; y: number }[] = [];
+    hourly.forEach((h, i) => {
+      if (h.cams_pm25 != null) {
+        run.push({ x: x(i), y: y(h.cams_pm25) });
+      } else if (run.length > 0) {
+        camsRuns.push(run);
+        run = [];
+      }
+    });
+    if (run.length) camsRuns.push(run);
+  }
+  const cams = camsRuns.filter((r) => r.length > 1).map(linePath).join(' ') || null;
 
   // Midnights and the hours to label (every 6 h, or 12 h on a phone).
   const step = innerW < 420 ? 12 : 6;
@@ -193,9 +207,9 @@ export function ForecastChart({ hourly, lang, labels }: { hourly: AqHour[]; lang
             {fmt(value(current))} <small>µg/m³</small>
           </strong>
           <span>{hourLabel(lang, current.t)}</span>
-          {hasCams && (
+          {hasCams && current.cams_pm25 != null && (
             <span>
-              CAMS {fmt(current.cams_pm25!)}
+              CAMS {fmt(current.cams_pm25)}
             </span>
           )}
         </div>
