@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
-import { LEVEL_COLORS, levelNow, levelOf, levelTextColor, type Level } from '../aq/levels';
+import { clampLevel, LEVEL_COLORS, levelNow, levelOf, levelTextColor, localDate, type Level } from '../aq/levels';
 import { air, levelName } from '../aq/strings';
 import type { AqStation } from '../aq/types';
 import { useColorMode } from '../lib/color-mode';
@@ -14,9 +14,14 @@ import { Segmented } from './Segmented';
 type Horizon = '0' | '24' | '48' | '72';
 
 // Level and PM2.5 of a station `hours` ahead: now from levelNow, later from the hourly forecast.
+// The list endpoint leaves `hourly` out, so other stations fall back to that day's daily mean.
 function at(s: AqStation, hours: number, now: Date): { level: Level; pm25: number } | null {
   if (hours === 0) return levelNow(s, now);
-  if (!s.hourly?.length) return null;
+  if (!s.hourly?.length) {
+    const date = localDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + hours / 24));
+    const day = s.daily.find((d) => d.date === date);
+    return day ? { level: clampLevel(day.level), pm25: day.pm25_mean } : null;
+  }
   const target = now.getTime() + hours * 3600_000;
   let best = s.hourly[0]!;
   for (const h of s.hourly) if (Math.abs(new Date(h.t).getTime() - target) < Math.abs(new Date(best.t).getTime() - target)) best = h;
