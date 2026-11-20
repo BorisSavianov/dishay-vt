@@ -41,6 +41,23 @@ export type AqStation = {
 
 export type AqMae = { model: number; cams: number; persistence: number };
 
+// The forecast scored with the real weather forecast (replay, 1–19 Nov 2026) and live since the loop started.
+export type AqScoreboard = {
+  updated_at: string;
+  replay?: {
+    from: string;
+    to: string;
+    issued_local: string;
+    models: string;
+    weather: string;
+    blh: 'none' | 'era5' | string; // "era5" = observed boundary-layer height: the page must say so
+    days: number;
+    mae_pm25_next_day: { vt: AqMae; bg: AqMae };
+    vt_days: { date: string; model_pm10: number; cams_pm10: number; observed_pm10: number; model_level: number; observed_level: number }[];
+  };
+  live?: { since: string; checked_hours: number; horizons: string; mae_pm25: AqMae };
+};
+
 export type AqModel = {
   name: string;
   kind?: 'mock' | 'trained' | string; // "mock" = invented numbers, label them as demo
@@ -55,6 +72,7 @@ export type AqModel = {
   importance?: { group: string; label_bg: string; label_en?: string; share: number }[];
   algorithm?: string; // e.g. "XGBoost" from v2
   band_coverage?: number; // share of measured values inside pm25_lo..pm25_hi on the holdout (target 0.8)
+  scoreboard?: AqScoreboard; // „Проверка на живо“ (contract/CONTRACT.md `model.scoreboard`)
 };
 
 export type AqForecast = {

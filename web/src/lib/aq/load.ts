@@ -64,8 +64,8 @@ export function readBundled(path = BUNDLED_PATH): AqForecast | null {
   }
 }
 
-// Neon first, then the committed JSON, then the labelled demo forecast. Never throws.
-export async function loadForecast(
+// Neon first, then the committed JSON, then the labelled demo forecast. Never throws. Not cached.
+export async function readForecast(
   opts: { sql?: Sql | null; bundled?: () => AqForecast | null; now?: Date } = {},
 ): Promise<AqLoad> {
   const sql = opts.sql === undefined ? getSql() : opts.sql;
@@ -85,6 +85,28 @@ export async function loadForecast(
   const bundled = (opts.bundled ?? readBundled)();
   if (bundled) return label('bundled', bundled);
   return { source: 'demo', forecast: demoForecast(opts.now ?? new Date()) };
+}
+
+// Reading every station's 72 hours from Neon takes seconds, and the writer replaces them once an hour, so a
+// server keeps a database read for CACHE_MS. Requests that arrive together share one read. Fallbacks (bundled
+// file, demo) are never kept, so the database is tried again on the next request.
+export const CACHE_MS = 120_000;
+let cached: { at: number; load: Promise<AqLoad> } | null = null;
+
+export function clearForecastCache(): void {
+  cached = null;
+}
+
+// The cached read the pages and routes use. Passing options (tests) skips the cache.
+export async function loadForecast(opts: Parameters<typeof readForecast>[0] = {}): Promise<AqLoad> {
+  if (Object.keys(opts).length > 0) return readForecast(opts);
+  const now = Date.now();
+  if (cached && now - cached.at < CACHE_MS) return cached.load;
+  const entry = { at: now, load: readForecast() };
+  cached = entry;
+  const result = await entry.load;
+  if (result.source !== 'database' && cached === entry) cached = null;
+  return result;
 }
 
 // The list endpoint leaves out `hourly`; the station endpoint has it.
