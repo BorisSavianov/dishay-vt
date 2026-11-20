@@ -26,3 +26,17 @@ create table if not exists aq_forecast (
   generated_at timestamptz not null,
   payload jsonb not null
 );
+
+-- Telegram alert bot (docs/superpowers/specs/2026-11-20-telegram-bot-design.md). Only the chat id, profile and
+-- station are stored: no names or usernames.
+create table if not exists tg_subscribers (
+  chat_id bigint primary key,
+  profile text not null,
+  station_id text not null,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create table if not exists tg_alerts_sent (
+  key text primary key,          -- chat_id|station_id|date|profile
+  sent_at timestamptz not null default now()
+);
