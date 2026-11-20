@@ -7,6 +7,7 @@ import type { MessageKey } from '@/lib/i18n';
 import { withLang } from '@/lib/page';
 import type { Lang } from '@/lib/types';
 import { ExportMenu } from './ExportMenu';
+import { Backdrop } from './Backdrop';
 import { BrandMark, Icon, type IconName } from './Icon';
 import { DocLang, LangSwitch } from './LangSwitch';
 import { ThemeToggle } from './ThemeToggle';
@@ -80,6 +81,7 @@ export function AppShell({
 
   return (
     <div className="app">
+      <Backdrop active={active} />
       <DocLang lang={lang} />
       <a className="skip-link" href="#main">
         {tr('skip.link')}

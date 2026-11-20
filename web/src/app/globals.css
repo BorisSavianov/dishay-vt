@@ -180,9 +180,40 @@ button {
 
 /* ---------- App shell ---------- */
 .app {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: 268px minmax(0, 1fr);
   min-height: 100svh;
+}
+
+/* The story's sky behind the platform: a glow low on the horizon under a dark zenith, plus a blurred chapter still. */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 60% at 70% 105%, var(--sky-horizon) 0%, transparent 60%),
+    linear-gradient(180deg, var(--sky-top) 0%, var(--bg) 70%);
+}
+
+.backdrop img {
+  position: absolute;
+  inset: -40px;
+  width: calc(100% + 80px);
+  height: calc(100% + 80px);
+  object-fit: cover;
+  object-position: 38% 50%;
+  filter: blur(28px) saturate(0.6);
+  opacity: 0.35;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 45%, transparent 95%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 45%, transparent 95%);
+}
+
+:root:not([data-theme='dark']) .backdrop img {
+  opacity: 0.25;
 }
 
 .sidebar {
