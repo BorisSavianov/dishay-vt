@@ -110,9 +110,10 @@ def day_shares(parts: dict[str, np.ndarray]) -> dict[str, float]:
 def evening_drop(parts: dict, local: pd.DatetimeIndex, date: dt.date, share: float = SHARE) -> float:
     """µg/m³ of PM2.5 removed on `date` 18:00–23:59 if `share` of the heating smoke went away."""
     m = (np.asarray(local.hour) >= 18) & (np.array(local.date) == date)
-    if not m.any():
+    h = np.asarray(parts["heating"], dtype=float)[m]
+    if not m.any() or np.isnan(h).all():
         return 0.0
-    return round(share * float(np.nanmean(np.asarray(parts["heating"], dtype=float)[m])), 1)
+    return round(share * float(np.nanmean(h)), 1)
 
 
 def bad_days(vt25: np.ndarray, vt10: np.ndarray, local: pd.DatetimeIndex, heating: np.ndarray | None = None,
@@ -135,6 +136,29 @@ def bad_days(vt25: np.ndarray, vt10: np.ndarray, local: pd.DatetimeIndex, heatin
         if ok.sum() >= 18 and level_of(float(g.loc[ok, "p25"].mean()), float(g.loc[ok, "p10"].mean())) >= 3:
             n += 1
     return n
+
+
+def load_sources_json(path: Path = OUT) -> dict | None:
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+
+
+def sources_payload(vt_fc: np.ndarray, reg_fc: np.ndarray, local: pd.DatetimeIndex, dates: list[str],
+                    prof_json: dict, holidays: set) -> tuple[dict[str, dict], dict]:
+    """Day shares for each forecast date that has hours, and the contract's `sources_what_if`."""
+    parts = split(vt_fc, reg_fc, local, prof_json["profiles"], holidays)
+    day = np.array([d.isoformat() for d in local.date])
+    shares = {}
+    for d in dates:
+        m = day == d
+        if m.any():
+            shares[d] = day_shares({k: v[m] for k, v in parts.items()})
+    share = float(prof_json.get("share", SHARE))
+    first = dates[0] if dates else day[0]
+    what_if = {"method": "estimate", "switch_share": share, "date": first,
+               "evening_drop_pm25": evening_drop(parts, local, dt.date.fromisoformat(first), share)}
+    if prof_json.get("last_winter"):
+        what_if["last_winter"] = prof_json["last_winter"]
+    return shares, what_if
 
 
 def _history():

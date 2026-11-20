@@ -27,6 +27,7 @@ from ml.aq_levels import EU_PM10_DAILY_LIMIT, level_of
 from ml.aq_models import Model
 from ml.aq_train import predict_all
 from ml.aq_scoreboard import live_score, log_issued, read_log, scoreboard_block
+from ml.aq_sources import REGIONAL_KM, km_from_vt, load_sources_json, sources_payload
 
 ROOT = Path(__file__).resolve().parents[1]
 MODELS = ROOT / "ml" / "models"
@@ -300,6 +301,32 @@ def run_once(write_db: bool = True) -> dict:
                 log(f"live check: {live['checked_hours']} h ({live['horizons']}), MAE {live['mae_pm25']}")
     except Exception as e:
         log(f"scoreboard failed: {e!r}")
+    try:  # „Кой замърсява?“: an estimate, VT stations only
+        src = load_sources_json()
+        if src:
+            import warnings
+
+            from ml.aq_features import _bg_holidays
+
+            dkm = km_from_vt(panel.sensors["lat"].to_numpy()[cols], panel.sensors["lon"].to_numpy()[cols])
+            P25 = p25.reshape(len(cols), len(H))
+            reg = P25[(dkm >= REGIONAL_KM[0]) & (dkm <= REGIONAL_KM[1])]
+            with np.errstate(all="ignore"), warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                vt_fc = np.nanmean(P25[dkm <= FEATURED_KM], axis=0)
+                reg_fc = np.nanpercentile(reg, 20, axis=0) if len(reg) else np.full(len(H), np.nan)
+            dates = [(today + dt.timedelta(days=off)).isoformat() for off in (1, 2, 3)]
+            shares, what_if = sources_payload(vt_fc, reg_fc, times_local[i + H], dates, src,
+                                              _bg_holidays({today.year, today.year + 1}))
+            for s in stations:
+                if s["featured"]:
+                    for item in s["daily"]:
+                        if item["date"] in shares:
+                            item["sources"] = shares[item["date"]]
+            model_block["sources_what_if"] = what_if
+            log(f"sources (estimate) {dates[0]}: {shares.get(dates[0])}; 20% switch −{what_if['evening_drop_pm25']} µg/m³ evening")
+    except Exception as e:
+        log(f"sources failed: {e!r}")
     payload = {"generated_at": generated, "model": model_block, "stations": stations}
     errors = validate(payload)
     if errors:

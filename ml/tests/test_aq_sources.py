@@ -169,3 +169,35 @@ def test_contract_rejects_sources_not_summing_to_one():
 
 def test_contract_rejects_measured_what_if():
     assert any("sources_what_if.method" in e for e in validate(payload_with_sources(what_if=dict(WHAT_IF, method="measured"))))
+
+
+# ---------------- Task 4: payload ----------------
+
+from ml.aq_sources import sources_payload
+
+PROF_JSON = {"share": 0.2, "method": "estimate", "profiles": PROF,
+             "last_winter": {"bad_days": 23, "bad_days_after": 14, "days": 182}}
+LOCAL58 = pd.date_range(pd.Timestamp("2026-11-21", tz=TZ), periods=58, freq="h")   # 21st, 22nd, 10 h of the 23rd
+DATES = ["2026-11-21", "2026-11-22", "2026-11-23", "2026-11-24"]
+
+
+def test_sources_payload_no_regional():
+    shares, _ = sources_payload(flat(20, 58), flat(np.nan, 58), LOCAL58, DATES, PROF_JSON, set())
+    for s in shares.values():
+        assert s["regional"] == 0.0 and abs(sum(s.values()) - 1.0) < 1e-9
+
+
+def test_sources_payload_partial_day():
+    shares, _ = sources_payload(flat(20, 58), flat(4, 58), LOCAL58, DATES, PROF_JSON, set())
+    assert list(shares) == ["2026-11-21", "2026-11-22", "2026-11-23"]
+
+
+def test_sources_payload_what_if_shape():
+    shares, what_if = sources_payload(flat(20, 58), flat(4, 58), LOCAL58, DATES, PROF_JSON, set())
+    assert what_if["date"] == "2026-11-21" and what_if["evening_drop_pm25"] == 2.8   # Sat: inc 16 - weekend base 2 = heating 14; × 0.2
+    assert validate(payload_with_sources(sources=shares["2026-11-21"], what_if=what_if)) == []
+
+
+def test_evening_drop_all_nan_is_zero():
+    local = pd.date_range(pd.Timestamp("2026-11-21", tz=TZ), periods=24, freq="h")
+    assert evening_drop({"heating": flat(np.nan)}, local, dt.date(2026, 11, 21)) == 0.0
