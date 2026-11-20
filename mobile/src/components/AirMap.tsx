@@ -6,7 +6,9 @@ import { LEVEL_COLORS, levelNow, levelOf, levelTextColor, type Level } from '../
 import { air, levelName } from '../aq/strings';
 import type { AqStation } from '../aq/types';
 import { useColorMode } from '../lib/color-mode';
+import { useLayout } from '../lib/layout';
 import type { Lang } from '../shared/types';
+import { Glass } from './Glass';
 import { Segmented } from './Segmented';
 
 type Horizon = '0' | '24' | '48' | '72';
@@ -36,26 +38,13 @@ export function AirMap({
 }) {
   const { mode, colors: c } = useColorMode();
   const [h, setH] = useState<Horizon>('0');
+  const { mapHeight } = useLayout();
   const now = useMemo(() => new Date(), []);
   const values = useMemo(() => stations.map((s) => ({ s, v: at(s, Number(h), now) })), [stations, h, now]);
 
   return (
     <View style={{ gap: 12 }}>
-      <Segmented
-        label={air(lang, 'air.map.title')}
-        value={h}
-        onChange={(k) => {
-          void Haptics.selectionAsync();
-          setH(k);
-        }}
-        options={[
-          { key: '0', label: air(lang, 'air.map.now') },
-          { key: '24', label: `+24 ${lang === 'bg' ? 'ч' : 'h'}` },
-          { key: '48', label: `+48 ${lang === 'bg' ? 'ч' : 'h'}` },
-          { key: '72', label: `+72 ${lang === 'bg' ? 'ч' : 'h'}` },
-        ]}
-      />
-      <View style={[styles.map, { borderColor: c.line, backgroundColor: c.card2 }]}>
+      <View style={[styles.map, { height: mapHeight, borderColor: c.line, backgroundColor: c.card2 }]}>
         <MapView
           style={StyleSheet.absoluteFill}
           initialRegion={{ latitude: 43.08, longitude: 25.63, latitudeDelta: 0.22, longitudeDelta: 0.22 }}
@@ -95,6 +84,24 @@ export function AirMap({
             );
           })}
         </MapView>
+        {/* The time switch floats over the map as a glass bar. */}
+        <Glass fallback={c.card} interactive style={styles.overlay}>
+          <Segmented
+            bare
+            label={air(lang, 'air.map.title')}
+            value={h}
+            onChange={(k) => {
+              void Haptics.selectionAsync();
+              setH(k);
+            }}
+            options={[
+              { key: '0', label: air(lang, 'air.map.now') },
+              { key: '24', label: `+24 ${lang === 'bg' ? 'ч' : 'h'}` },
+              { key: '48', label: `+48 ${lang === 'bg' ? 'ч' : 'h'}` },
+              { key: '72', label: `+72 ${lang === 'bg' ? 'ч' : 'h'}` },
+            ]}
+          />
+        </Glass>
       </View>
       <View style={styles.legend}>
         {([1, 2, 3, 4, 5, 6] as Level[]).map((l) => (
@@ -109,7 +116,8 @@ export function AirMap({
 }
 
 const styles = StyleSheet.create({
-  map: { height: 380, borderRadius: 18, borderWidth: 1, overflow: 'hidden' },
+  map: { borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  overlay: { position: 'absolute', top: 10, left: 10, borderRadius: 16, overflow: 'hidden', padding: 2 },
   dot: { minWidth: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   dotText: { fontSize: 12, fontWeight: '800' },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },

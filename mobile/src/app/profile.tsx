@@ -5,10 +5,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { levelNow, PROFILES, LEVEL_COLORS, type Profile } from '../aq/levels';
 import { useAir } from '../aq/store';
 import { air, profileName } from '../aq/strings';
-import { Card, CardTitle, Note } from '../components/Card';
+import { Card, CardTitle, Columns, Note } from '../components/Card';
 import { Screen } from '../components/Screen';
 import { useColors } from '../lib/color-mode';
 import { useLang } from '../lib/lang';
+import { useLayout } from '../lib/layout';
 
 const PROFILE_ICONS: Record<Profile, string> = { asthma: '🫁', child: '🧒', elderly: '🧓', runner: '🏃', general: '🙂' };
 
@@ -16,6 +17,7 @@ const PROFILE_ICONS: Record<Profile, string> = { asthma: '🫁', child: '🧒', 
 export default function ProfileScreen() {
   const { lang } = useLang();
   const c = useColors();
+  const { columns } = useLayout();
   const { prefs, setPrefs, forecast, home, alerts, enableAlerts } = useAir();
   const [profile, setProfile] = useState<Profile>(prefs.profile);
   const [stationId, setStationId] = useState<string | null>(prefs.stationId ?? home?.id ?? null);
@@ -37,71 +39,80 @@ export default function ProfileScreen() {
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setPrefs({ profile, stationId, onboarded: true });
     if (!alerts.allowed) await enableAlerts();
-    if (router.canGoBack()) router.back();
-    else router.navigate('/');
+    router.navigate('/');
   }
+
+  const stationCard = (
+    <Card>
+      <CardTitle title={air(lang, 'air.station')} />
+      <View style={{ gap: 8 }} accessibilityRole="radiogroup">
+        {stations.map((s) => {
+          const on = s.id === stationId;
+          const now = levelNow(s, new Date());
+          return (
+            <Pressable
+              key={s.id}
+              onPress={() => setStationId(s.id)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: on }}
+              style={[styles.row, { backgroundColor: on ? c.accentSoft : c.card, borderColor: on ? c.accent : c.line }]}
+            >
+              <View style={[styles.dot, { backgroundColor: now ? LEVEL_COLORS[now.level] : c.line }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rowTitle, { color: c.fg }]}>{s.name}</Text>
+                <Text style={[styles.rowSub, { color: c.muted }]}>{s.city}</Text>
+              </View>
+              {on ? <Text style={{ color: c.accent, fontWeight: '800' }}>✓</Text> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    </Card>
+  );
 
   return (
     <Screen title={air(lang, 'air.profile.title')} lead={air(lang, 'air.profile.lead')}>
-      <Card>
-        <View style={styles.grid} accessibilityRole="radiogroup">
-          {PROFILES.map((p) => {
-            const on = p === profile;
-            return (
-              <Pressable
-                key={p}
-                onPress={() => {
-                  void Haptics.selectionAsync();
-                  setProfile(p);
-                }}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: on }}
-                style={[
-                  styles.chip,
-                  { backgroundColor: on ? c.accentSoft : c.card2, borderColor: on ? c.accent : c.line },
-                ]}
-              >
-                <Text style={styles.emoji}>{PROFILE_ICONS[p]}</Text>
-                <Text style={[styles.chipText, { color: c.fg }]}>{profileName(lang, p)}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </Card>
+      <Columns
+        columns={columns}
+        left={
+          <>
+            <Card>
+              <View style={styles.grid} accessibilityRole="radiogroup">
+                {PROFILES.map((p) => {
+                  const on = p === profile;
+                  return (
+                    <Pressable
+                      key={p}
+                      onPress={() => {
+                        void Haptics.selectionAsync();
+                        setProfile(p);
+                      }}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      style={[
+                        styles.chip,
+                        { backgroundColor: on ? c.accentSoft : c.card2, borderColor: on ? c.accent : c.line },
+                      ]}
+                    >
+                      <Text style={styles.emoji}>{PROFILE_ICONS[p]}</Text>
+                      <Text style={[styles.chipText, { color: c.fg }]}>{profileName(lang, p)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Card>
+            <Pressable
+              onPress={save}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.save, { backgroundColor: c.accent }, pressed && { opacity: 0.8 }]}
+            >
+              <Text style={[styles.saveText, { color: c.onAccent }]}>{air(lang, 'air.profile.save')}</Text>
+            </Pressable>
+          </>
+        }
+        right={stationCard}
+      />
 
-      <Card>
-        <CardTitle title={air(lang, 'air.station')} />
-        <View style={{ gap: 8 }} accessibilityRole="radiogroup">
-          {stations.map((s) => {
-            const on = s.id === stationId;
-            const now = levelNow(s, new Date());
-            return (
-              <Pressable
-                key={s.id}
-                onPress={() => setStationId(s.id)}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: on }}
-                style={[styles.row, { backgroundColor: on ? c.accentSoft : c.card, borderColor: on ? c.accent : c.line }]}
-              >
-                <View style={[styles.dot, { backgroundColor: now ? LEVEL_COLORS[now.level] : c.line }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.rowTitle, { color: c.fg }]}>{s.name}</Text>
-                  <Text style={[styles.rowSub, { color: c.muted }]}>{s.city}</Text>
-                </View>
-                {on ? <Text style={{ color: c.accent, fontWeight: '800' }}>✓</Text> : null}
-              </Pressable>
-            );
-          })}
-        </View>
-      </Card>
-
-      <Pressable
-        onPress={save}
-        accessibilityRole="button"
-        style={({ pressed }) => [styles.save, { backgroundColor: c.accent }, pressed && { opacity: 0.8 }]}
-      >
-        <Text style={[styles.saveText, { color: c.onAccent }]}>{air(lang, 'air.profile.save')}</Text>
-      </Pressable>
       <Note>{air(lang, 'air.source')}</Note>
     </Screen>
   );

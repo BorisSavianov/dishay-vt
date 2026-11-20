@@ -1,14 +1,12 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import { Tabs } from 'expo-router/js-tabs';
+import { NativeTabs } from 'expo-router/native-tabs';
 import type { ReactNode } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AirProvider } from '../aq/store';
-import { air } from '../aq/strings';
-import { Icon, type IconName } from '../components/Icon';
+import { air, type AirKey } from '../aq/strings';
 import { ColorModeProvider, useColorMode, useColors } from '../lib/color-mode';
 import { LangProvider, useLang } from '../lib/lang';
-import { t, type MessageKey } from '../shared/i18n';
 
 export default function RootLayout() {
   return (
@@ -34,47 +32,26 @@ function AppTheme({ children }: { children: ReactNode }) {
   return <ThemeProvider value={mode === 'dark' ? DarkTheme : DefaultTheme}>{children}</ThemeProvider>;
 }
 
-const TABS: { name: string; label: MessageKey | 'air'; icon: IconName }[] = [
-  { name: 'index', label: 'air', icon: 'activity' },
-  { name: 'map', label: 'tab.map', icon: 'map' },
-  { name: 'health', label: 'tab.health', icon: 'heart' },
-  { name: 'insights', label: 'tab.ai', icon: 'sparkle' },
-  { name: 'data', label: 'tab.data', icon: 'database' },
+// The four tabs of the plan (docs/hackathon-plan.md, Boris): air now, the forecast map, health help, profile.
+const TABS: { name: string; label: AirKey; sf: { default: string; selected: string }; md: string }[] = [
+  { name: 'index', label: 'tab.air', sf: { default: 'aqi.medium', selected: 'aqi.medium' }, md: 'air' },
+  { name: 'map', label: 'tab.map', sf: { default: 'map', selected: 'map.fill' }, md: 'map' },
+  { name: 'health', label: 'tab.health', sf: { default: 'cross.case', selected: 'cross.case.fill' }, md: 'medical_services' },
+  { name: 'profile', label: 'tab.profile', sf: { default: 'person.crop.circle', selected: 'person.crop.circle.fill' }, md: 'person' },
 ];
 
-// The bottom bar of the design: five tabs, indigo for the active one. Each screen draws its own header.
-// The Prediction screen is a sixth route that the Data tab opens.
+// Native tab bar: on iOS 26+ the system draws it as Liquid Glass and shrinks it while scrolling down.
 function TabBar() {
   const { lang } = useLang();
   const c = useColors();
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: c.accentStrong,
-        tabBarInactiveTintColor: c.muted,
-        tabBarStyle: { backgroundColor: c.card, borderTopColor: c.line },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-        sceneStyle: { backgroundColor: c.bg },
-      }}
-    >
+    <NativeTabs minimizeBehavior="onScrollDown" tintColor={c.accentStrong}>
       {TABS.map((tab) => (
-        <Tabs.Screen
-          key={tab.name}
-          name={tab.name}
-          options={{
-            title: tab.label === 'air' ? air(lang, 'tab.air') : t(lang, tab.label),
-            tabBarIcon: ({ color }) => <Icon name={tab.icon} color={color} />,
-          }}
-        />
+        <NativeTabs.Trigger key={tab.name} name={tab.name}>
+          <NativeTabs.Trigger.Icon sf={tab.sf as never} md={tab.md as never} />
+          <NativeTabs.Trigger.Label>{air(lang, tab.label)}</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
       ))}
-      {/* Routes without a tab: the profile picker (from the Air tab), the old overview and Prediction (from Data). */}
-      <Tabs.Screen name="profile" options={{ title: air(lang, 'air.profile.edit'), tabBarItemStyle: { display: 'none' } }} />
-      <Tabs.Screen name="overview" options={{ title: t(lang, 'tab.dashboard'), tabBarItemStyle: { display: 'none' } }} />
-      <Tabs.Screen
-        name="predict"
-        options={{ title: t(lang, 'nav.predict'), tabBarItemStyle: { display: 'none' } }}
-      />
-    </Tabs>
+    </NativeTabs>
   );
 }
