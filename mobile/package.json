@@ -39,7 +39,7 @@
     "prebuild": "expo prebuild",
     "sync": "node scripts/sync-shared.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/aq/levels.test.ts src/lib/api.test.ts src/lib/ui-strings.test.ts src/lib/map-math.test.ts src/theme/palette.test.ts src/theme/tokens-parity.test.ts"
+    "test": "tsx --test src/aq/levels.test.ts src/aq/sources.test.ts src/lib/api.test.ts src/lib/ui-strings.test.ts src/lib/map-math.test.ts src/theme/palette.test.ts src/theme/tokens-parity.test.ts"
   },
   "private": true
 }

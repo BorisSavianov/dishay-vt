@@ -20,7 +20,11 @@ export type AqDay = {
   exceeds_eu_limit: boolean; // PM10 daily mean > 50 µg/m³
   alert_level?: number; // sent by the live forecast; not in the contract yet
   reasons: AqReason[];
+  sources?: AqSources; // featured VT stations only: estimated PM2.5 shares, summing to 1
 };
+
+// „Кой замърсява?“: an estimate from citizen sensors and weather, not a measurement.
+export type AqSources = { heating: number; traffic: number; regional: number; other: number };
 
 export type AqStation = {
   id: string;

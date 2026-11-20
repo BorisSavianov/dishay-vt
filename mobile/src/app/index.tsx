@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { testAlert } from '../aq/alerts';
 import { bestWindow, clampLevel, LEVEL_COLORS, levelNow, levelTextColor, localDate, type Level } from '../aq/levels';
+import { freshness, isCleanDay, showSources, sourcesLine } from '../aq/sources';
 import { useAir } from '../aq/store';
 import { advice, air, levelName, profileName } from '../aq/strings';
 import { Card, CardTitle, Columns, Note } from '../components/Card';
@@ -26,6 +27,14 @@ function dayLabel(lang: Lang, date: string, now: Date): string {
   if (date === localDate(new Date(now.getTime() + 86400_000))) return air(lang, 'day.tomorrow');
   const [y, m, d] = date.split('-').map(Number) as [number, number, number];
   return new Date(y, m - 1, d).toLocaleDateString(lang === 'bg' ? 'bg-BG' : 'en-GB', { weekday: 'long' });
+}
+
+// When the forecast was made; amber once it is more than 2 hours old (the hourly loop has stopped).
+function FreshLine({ generatedAt, now, lang }: { generatedAt: string; now: Date; lang: Lang }) {
+  const c = useColors();
+  const f = freshness(generatedAt, now);
+  if (f.stale) return <Text style={[styles.live, { color: c.warn }]}>{air(lang, 'air.stale', { time: f.time })}</Text>;
+  return <Text style={[styles.live, { color: c.muted }]}>{air(lang, f.today ? 'air.live.today' : 'air.live', { time: f.time })}</Text>;
 }
 
 // The home tab: the home station's air now, the 72-hour forecast, the next days with reasons,
@@ -67,7 +76,7 @@ export default function AirScreen() {
           {loading ? <ActivityIndicator color={c.warn} /> : <Icon name="refresh" color={c.warn} size={18} />}
         </Pressable>
       ) : (
-        <Text style={[styles.live, { color: c.muted }]}>{air(lang, 'air.live', { time: hhmm(forecast.generated_at) })}</Text>
+        <FreshLine generatedAt={forecast.generated_at} now={now} lang={lang} />
       )}
 
       <Columns
@@ -163,7 +172,7 @@ export default function AirScreen() {
             <Card>
               <CardTitle title={air(lang, 'air.days.title')} />
               <View style={{ gap: 10 }}>
-                {home.daily.map((d) => {
+                {home.daily.map((d, i) => {
                   const lv = clampLevel(d.level);
                   return (
                     <View key={d.date} style={[styles.day, { borderColor: c.line, backgroundColor: c.card2 }]}>
@@ -175,6 +184,7 @@ export default function AirScreen() {
                         <Text style={[styles.dayPm, { color: c.muted }]}>PM10 {Math.round(d.pm10_mean)}</Text>
                       </View>
                       {d.exceeds_eu_limit ? <Text style={[styles.eu, { color: c.neg }]}>⚠ {air(lang, 'air.eu')}</Text> : null}
+                      {isCleanDay(d) ? <Text style={[styles.clean, { color: c.fg }]}>{air(lang, 'air.days.clean')}</Text> : null}
                       {d.reasons.length ? (
                         <Text style={[styles.why, { color: c.muted }]}>
                           {air(lang, 'air.days.why')}:{' '}
@@ -183,6 +193,9 @@ export default function AirScreen() {
                             .map((r) => (lang === 'en' && r.label_en ? r.label_en : r.label_bg))
                             .join(' · ')}
                         </Text>
+                      ) : null}
+                      {i === 0 && showSources(d) ? (
+                        <Text style={[styles.why, { color: c.muted }]}>{sourcesLine(d.sources, lang)}</Text>
                       ) : null}
                     </View>
                   );
@@ -223,6 +236,7 @@ const styles = StyleSheet.create({
   dayPm: { fontSize: 13, fontWeight: '600' },
   eu: { fontSize: 13, fontWeight: '700' },
   why: { fontSize: 13, lineHeight: 18 },
+  clean: { fontSize: 13.5, fontWeight: '600', lineHeight: 18 },
   button: { minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   ghost: { borderWidth: 1 },
   buttonText: { fontSize: 15, fontWeight: '700' },
