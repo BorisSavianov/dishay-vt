@@ -226,6 +226,7 @@ Either part may be missing. When both are missing, the whole field is left out, 
     "models": "trained before winter 2025/26",
     "weather": "forecast",                 // archived forecast runs (Open-Meteo Previous Runs), never newer than the issue time
     "blh": "none",                         // "none" = no boundary-layer height at all; "era5" = observed BLH: the page MUST say so
+    "cams": "archive",                     // CAMS (model input and baseline) is Open-Meteo's CAMS archive, fresher than the issue time: the page MUST say so
     "days": 19,
     "mae_pm25_next_day": { "vt": { "model": 3.4, "cams": 6.0, "persistence": 4.9 },   // µg/m³, hourly PM2.5, next-day hours (12–35 h ahead)
                            "bg": { "model": 3.0, "cams": 7.7, "persistence": 4.2 } },
@@ -240,3 +241,5 @@ Either part may be missing. When both are missing, the whole field is left out, 
 ```
 
 All three MAEs are computed over the same hours: an hour counts only when the observation, the model, CAMS and persistence are all present.
+
+Honesty note: the weather is as forecast at the time, but CAMS (both the model's CAMS input and the CAMS baseline) is the archive, which keeps the newest run for each hour. Model vs CAMS is therefore like-for-like, while model vs persistence is slightly flattered. The holdout numbers share this. The BG numbers cover the 50 cells with CAMS history.

@@ -158,7 +158,10 @@ def run_block(rows: pd.DataFrame, blh: str) -> dict:
     dates = sorted(str(x) for x in rows.loc[ok, "date"].unique())
     return {"from": dates[0] if dates else str(REPLAY_FROM), "to": dates[-1] if dates else str(REPLAY_TO),
             "issued_local": f"{ISSUE_HOUR:02d}:00", "models": "trained before winter 2025/26",
-            "weather": "forecast", "blh": blh, "days": len(dates),
+            "weather": "forecast", "blh": blh,
+            # CAMS (model input and baseline) comes from Open-Meteo's CAMS archive, which keeps the newest run per
+            # hour, so it is fresher than the 12:00 issue. Model vs CAMS stays like-for-like; the page says so.
+            "cams": "archive", "days": len(dates),
             "mae_pm25_next_day": {"vt": mae(rows[rows["vt"]]), "bg": mae(rows)},
             "vt_days": vt_days(rows)}
 
@@ -289,13 +292,23 @@ def live_score(log: pd.DataFrame, obs25: np.ndarray, times: pd.DatetimeIndex, se
 
 def scoreboard_block(live: dict | None, cache: Path = CACHE) -> dict | None:
     """model.scoreboard: the chosen replay run (if the replay has been cached) and the live score (if any)."""
+    from ml.aq_contract import scoreboard_errors
+
+    def valid(key: str, part) -> bool:
+        """A part that fails the contract or holds NaN is dropped, so it can never stop the hourly forecast."""
+        try:
+            json.dumps(part, allow_nan=False)
+        except (TypeError, ValueError):
+            return False
+        return not scoreboard_errors({key: part})
+
     block: dict = {}
     if cache.exists():
         c = json.loads(cache.read_text(encoding="utf-8"))
         run = (c.get("runs") or {}).get(c.get("chosen"))
-        if run:
+        if run and valid("replay", run):
             block["replay"] = run
-    if live:
+    if live and valid("live", live):
         block["live"] = live
     if not block:
         return None

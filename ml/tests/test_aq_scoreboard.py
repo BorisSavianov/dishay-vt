@@ -243,3 +243,27 @@ def test_scoreboard_block_uses_chosen_run(tmp_path):
     b = scoreboard_block(None, cache=cache)
     assert b["replay"]["blh"] == "era5" and "live" not in b and b["updated_at"].endswith("+02:00")
     assert validate(payload_with(b)) == []
+
+
+# ---------------- Final review fixes ----------------
+
+def test_run_block_discloses_cams_source():
+    rows = pd.concat([rows_for("2026-11-02", 24, 24)], ignore_index=True)
+    assert run_block(rows, "none")["cams"] == "archive"
+
+
+def test_scoreboard_block_drops_invalid_replay_keeps_live(tmp_path):
+    bad = copy.deepcopy(EXAMPLE["replay"])
+    bad["mae_pm25_next_day"]["vt"]["model"] = float("nan")
+    cache = tmp_path / "replay.json"
+    cache.write_text(json.dumps({"chosen": "none", "runs": {"none": bad}}))
+    b = scoreboard_block(EXAMPLE["live"], cache=cache)
+    assert "replay" not in b and b["live"] == EXAMPLE["live"]
+
+
+def test_scoreboard_block_drops_nan_anywhere(tmp_path):
+    bad = copy.deepcopy(EXAMPLE["replay"])
+    bad["vt_days"][0]["cams_pm10"] = float("nan")
+    cache = tmp_path / "replay.json"
+    cache.write_text(json.dumps({"chosen": "none", "runs": {"none": bad}}))
+    assert scoreboard_block(None, cache=cache) is None

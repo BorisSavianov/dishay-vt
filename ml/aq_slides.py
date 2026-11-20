@@ -65,7 +65,8 @@ def main() -> None:
         blh = ("без прогноза за слоя на смесване" if season["blh"] == "none"
                else "слоят на смесване е измерен (ERA5)")
         fig.text(0.01, 0.015, f"* {season['from'][8:]}–{season['to'][8:]}.11.2026, с прогнозата за времето, каквато е била "
-                 f"тогава ({blh}).\n  Модели, обучени преди зима 2025/26: тези седмици не са виждани.", fontsize=10, color=INK)
+                 f"тогава ({blh}).\n  Модели, обучени преди зима 2025/26: тези седмици не са виждани. CAMS (вход и "
+                 f"сравнение) е от архива – по-нов от момента на прогнозата, еднакво за двете колони.", fontsize=10, color=INK)
     ax.set_ylim(0, 1.15 * max(m[k] for _, m in groups for k in ("model", "persistence", "cams")))
     ax.legend(frameon=False, fontsize=12, ncol=3, loc="upper left")
     style(ax)
@@ -111,7 +112,8 @@ def main() -> None:
         sv, sg = season["mae_pm25_next_day"]["vt"], season["mae_pm25_next_day"]["bg"]
         lines.append(
             f"- This season ({season['from']} → {season['to']}, {season['days']} days, forecast weather, BLH {season['blh']}"
-            f"{': boundary layer observed' if season['blh'] == 'era5' else ''}), PM2.5 MAE next-day hours: "
+            f"{': boundary layer observed' if season['blh'] == 'era5' else ''}; CAMS input and baseline from the CAMS archive, "
+            f"fresher than the issue time), PM2.5 MAE next-day hours: "
             f"VT model {sv['model']} vs CAMS {sv['cams']} → {100 * (1 - sv['model'] / sv['cams']):.0f}% better "
             f"(persistence {sv['persistence']}); BG model {sg['model']} vs CAMS {sg['cams']} → "
             f"{100 * (1 - sg['model'] / sg['cams']):.0f}% better (persistence {sg['persistence']}).")

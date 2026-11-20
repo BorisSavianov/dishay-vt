@@ -68,7 +68,7 @@ Given the latest readings of a citizen PM sensor, its neighbours, the weather fo
 
 ## Limits (say them out loud)
 
-- Training uses observed weather (ERA5), while live forecasts use forecast weather, so live errors will be somewhat larger than the holdout numbers.
+- Training uses observed weather (ERA5), while live forecasts use forecast weather, so live errors will be somewhat larger than the holdout numbers. The November 2026 replay (`ml/aq_scoreboard.py`) fixes this for the weather by using archived forecast runs. It doesn't fix it for CAMS: CAMS, both input and baseline, comes from the archive, which keeps the newest run for each hour.
 - Citizen sensors are not reference instruments. The humidity correction is a published approximation, not a calibration against an official station.
 - The model is trained on heating seasons only. Summer (ozone and dust events) is out of scope.
 - Day-before warnings: the point forecast (`level`) is conservative on smog days. It caught 7 of 23 bad VT days.
