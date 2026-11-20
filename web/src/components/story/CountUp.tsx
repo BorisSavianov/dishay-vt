@@ -14,6 +14,8 @@ export function CountUp({ to, format, className }: { to: number; format: (n: num
       ([e]) => {
         if (!e?.isIntersecting) return;
         io.disconnect();
+        // Poster mode shows the story still: the number stays at its final value.
+        if (document.documentElement.dataset.storyMode === 'poster') return;
         const t0 = performance.now();
         const step = (t: number) => {
           const k = Math.min(1, (t - t0) / 1600);

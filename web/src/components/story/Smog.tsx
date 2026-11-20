@@ -178,6 +178,8 @@ export function Smog({ count, dpr }: { count: number; dpr: number }) {
     u.uStreams!.value = s.streams;
     u.uClear!.value = s.clear;
     u.uPixel!.value = size.height * dpr * 0.9;
+    const drawn = Math.floor(count * sceneStore.drawScale);
+    if (geometry.drawRange.count !== drawn) geometry.setDrawRange(0, drawn);
   });
 
   return <points geometry={geometry} material={material} frustumCulled={false} />;

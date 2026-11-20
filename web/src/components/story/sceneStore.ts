@@ -4,9 +4,17 @@ import { useSyncExternalStore } from 'react';
 import { chapterOf, sceneAt, type SceneState } from '@/lib/story/timeline';
 
 // smog = the effective smog for shaders: the scene's smog, shaped by the real 18.12 hourly PM10 during chapter 2.
-type Store = { p: number; state: SceneState; chapter: number; smog: number; smogShape: (s: SceneState) => number };
+// drawScale = the share of haze particles drawn; the performance monitor halves it on weak GPUs.
+type Store = {
+  p: number;
+  state: SceneState;
+  chapter: number;
+  smog: number;
+  smogShape: (s: SceneState) => number;
+  drawScale: number;
+};
 
-export const sceneStore: Store = { p: 0, state: sceneAt(0), chapter: 1, smog: 0, smogShape: (s) => s.smog };
+export const sceneStore: Store = { p: 0, state: sceneAt(0), chapter: 1, smog: 0, smogShape: (s) => s.smog, drawScale: 1 };
 
 const listeners = new Set<() => void>();
 

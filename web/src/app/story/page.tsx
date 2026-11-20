@@ -21,7 +21,16 @@ type Params = Promise<{ lang?: string | string[] }>;
 
 export async function generateMetadata({ searchParams }: { searchParams: Params }): Promise<Metadata> {
   const lang = langOf(await searchParams);
-  return { title: story(lang, 'meta.title'), description: story(lang, 'meta.description') };
+  const title = story(lang, 'meta.title');
+  const description = story(lang, 'meta.description');
+  // The OG card is the chapter 1 poster: the valley at dusk, straight from the 3D scene.
+  const images = [{ url: '/story/ch1.webp', width: 1600, height: 1000, alt: title }];
+  return {
+    title,
+    description,
+    openGraph: { title, description, images, type: 'website' },
+    twitter: { card: 'summary_large_image', title, description, images },
+  };
 }
 
 export default async function StoryPage({ searchParams }: { searchParams: Params }) {

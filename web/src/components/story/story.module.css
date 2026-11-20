@@ -34,6 +34,36 @@
   pointer-events: none;
 }
 
+.posters {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: #0b0c22;
+}
+
+.posters img {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  /* The town sits left of centre in every frame: keep it in view on narrow screens. */
+  object-position: 38% 50%;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.posters img[data-on] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .posters img {
+    transition: none;
+  }
+}
+
 .content {
   position: relative;
   z-index: 1;

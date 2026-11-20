@@ -11,9 +11,9 @@ import css from './chrome.module.css';
 export function TopBar({ lang, forecastHref }: { lang: Lang; forecastHref: string }) {
   return (
     <header className={css.bar}>
-      <a className={css.brand} href="#ch-1">
+      <a className={css.brand} href="#ch-1" aria-label={story(lang, 'ch1.title')}>
         <span className={css.mark} aria-hidden="true" />
-        {story(lang, 'ch1.title')}
+        <span className={css.brandText}>{story(lang, 'ch1.title')}</span>
       </a>
       <div className={css.barEnd}>
         <LangSwitch lang={lang} label={t(lang, 'lang.label')} names={{ bg: t(lang, 'lang.bg'), en: t(lang, 'lang.en') }} />
