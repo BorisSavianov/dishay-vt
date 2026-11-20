@@ -49,6 +49,8 @@ export type AqModel = {
   mae_vt?: AqMae; // Veliko Tarnovo stations only, 24 h
   mae_by_horizon?: ({ h: number } & AqMae)[];
   importance?: { group: string; label_bg: string; label_en?: string; share: number }[];
+  algorithm?: string; // e.g. "XGBoost" from v2
+  band_coverage?: number; // share of measured values inside pm25_lo..pm25_hi on the holdout (target 0.8)
 };
 
 export type AqForecast = {

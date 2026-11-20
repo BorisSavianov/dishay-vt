@@ -11,7 +11,7 @@ import { dayLabel, fmtPm } from '@/lib/aq/format';
 import { loadForecast } from '@/lib/aq/load';
 import { air, type AirKey } from '@/lib/aq/strings';
 import type { AqMae } from '@/lib/aq/types';
-import { maeBars, pctBetter } from '@/lib/aq/why';
+import { coveragePct, maeBars, pctBetter } from '@/lib/aq/why';
 import { fmtInt, fmtNum } from '@/lib/format';
 import { langOf, type SearchParams } from '@/lib/page';
 import { sourceLine } from '@/lib/sources';
@@ -349,6 +349,10 @@ export default async function Why({ searchParams }: { searchParams: SearchParams
             <li>{tr('why.method.2')}</li>
             <li>{tr('why.method.3')}</li>
             <li>{tr('why.method.4')}</li>
+            {m.algorithm && <li>{tr('why.method.algo', { algorithm: m.algorithm })}</li>}
+            {coveragePct(m.band_coverage) !== null && (
+              <li>{tr('why.method.band', { pct: coveragePct(m.band_coverage)! })}</li>
+            )}
           </ul>
           <p className="note">{tr('air.source')}</p>
         </section>

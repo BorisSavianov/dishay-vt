@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { maeBars, pctBetter } from './why';
+import { coveragePct, maeBars, pctBetter } from './why';
 
 describe('why helpers', () => {
   it('says how much smaller our error is', () => {
@@ -13,5 +13,11 @@ describe('why helpers', () => {
     const bars = maeBars({ model: 2.8, cams: 8.1, persistence: 4 });
     expect(bars.map((b) => b.key)).toEqual(['model', 'persistence', 'cams']);
     expect(bars[2]!.share).toBe(1);
+  });
+
+  it('reads band coverage as a share or a percent', () => {
+    expect(coveragePct(0.77)).toBe(77);
+    expect(coveragePct(77)).toBe(77);
+    expect(coveragePct(undefined)).toBeNull();
   });
 });

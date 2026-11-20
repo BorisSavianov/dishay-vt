@@ -13,3 +13,9 @@ export function maeBars(mae: AqMae): { key: keyof AqMae; value: number; share: n
     .map((key) => ({ key, value: mae[key], share: mae[key] / max }))
     .sort((a, b) => a.value - b.value);
 }
+
+// Band coverage as a whole percent, whether the writer sends a share (0.77) or a percent (77).
+export function coveragePct(v: number | undefined): number | null {
+  if (v === undefined || !Number.isFinite(v) || v < 0) return null;
+  return Math.round(v <= 1 ? v * 100 : v);
+}
