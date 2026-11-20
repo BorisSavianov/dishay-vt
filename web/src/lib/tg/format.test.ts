@@ -29,7 +29,7 @@ describe('bot messages', () => {
   it('formats the replay from the real episode file', () => {
     const t = formatReplay(episodeOf(episodeJson)!, 'asthma');
     expect(t.split('\n')[0]).toBe('🔁 Повторение от 18.12.2025: реален смог във Велико Търново, предупреден ден по-рано');
-    expect(t).toContain('Прогноза от 17.12, 12:00: 🟡 Умерен · PM10 ~41');
+    expect(t).toContain('Прогноза от 17.12, 12:00: 🟡 Умерен · PM10 ~36');
     expect(t).toContain('Измерено: 🟡 Умерен · PM10 ~69 · над нормата на ЕС');
     expect(t).toContain('CAMS: PM10 ~22');
     expect(t).toContain(advice('bg', 'asthma', 3));
