@@ -4,8 +4,8 @@ import type { Lang } from '../shared/types';
 // The English table is typed against the Bulgarian keys, so a missing English key fails typecheck.
 const bg = {
   'mode.toggle': 'Цветова тема',
-  'mode.light': 'Светла',
-  'mode.dark': 'Тъмна',
+  'mode.light': 'Ден',
+  'mode.dark': 'Здрач',
   'chart.hint': 'плъзнете по графиката за други години',
   'ml.loading': 'Зареждане на модела…',
   'ml.retry': 'Опитай отново',
@@ -17,8 +17,8 @@ export type UiKey = keyof typeof bg;
 
 const en: Record<UiKey, string> = {
   'mode.toggle': 'Colour theme',
-  'mode.light': 'Light',
-  'mode.dark': 'Dark',
+  'mode.light': 'Day',
+  'mode.dark': 'Dusk',
   'chart.hint': 'drag across the chart for other years',
   'ml.loading': 'Loading the model…',
   'ml.retry': 'Try again',
