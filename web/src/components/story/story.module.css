@@ -67,6 +67,13 @@
   text-align: center;
 }
 
+.bottom {
+  justify-content: center;
+  align-items: flex-end;
+  text-align: center;
+  padding-bottom: 6vh;
+}
+
 .card {
   inline-size: min(100%, 460px);
   padding: clamp(20px, 3vw, 32px);
@@ -223,6 +230,16 @@
   font-variant-numeric: tabular-nums;
 }
 
+.track {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.bars b {
+  min-inline-size: 2.6ch;
+  text-align: end;
+}
+
 .barOurs,
 .barCams {
   display: block;
@@ -284,4 +301,55 @@
   .cueLine {
     animation: none;
   }
+}
+
+/* Chapter 2 clock */
+.clock {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--card-line);
+}
+
+.clockTime {
+  font-size: clamp(2.4rem, 5vw, 3.6rem);
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--sodium);
+}
+
+.clockValue {
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--card-muted);
+}
+
+.clockTrack {
+  display: block;
+  block-size: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.clockBar {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #e9c43b, #ef7e3a);
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.clockBar[data-over='true'] {
+  background: linear-gradient(90deg, #ef7e3a, #d6334a);
+}
+
+.story :global(.story-line) {
+  padding-bottom: 0.06em;
 }

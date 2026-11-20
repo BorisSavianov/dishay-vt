@@ -7,7 +7,7 @@ import css from './story.module.css';
 // Optional client widgets the island injects per chapter (HUDs, phone, today card, CTA).
 export type ChapterSlots = Partial<Record<'ch2' | 'ch3' | 'ch4' | 'ch7' | 'ch8', ReactNode>>;
 
-type Align = 'center' | 'left' | 'right';
+type Align = 'center' | 'left' | 'right' | 'bottom';
 
 function Chapter({ n, align, children, wide }: { n: number; align: Align; children: ReactNode; wide?: boolean }) {
   const day = n >= 7;
@@ -91,14 +91,18 @@ export function Chapters({ data, slots = {} }: { data: StoryData; slots?: Chapte
           <div>
             <dt>{s('ch5.ours')}</dt>
             <dd>
-              <span className={css.barOurs} style={{ inlineSize: `${(f.maeVt.model / f.maeVt.cams) * 100}%` }} data-bar />
+              <span className={css.track}>
+                <span className={css.barOurs} style={{ inlineSize: `${(f.maeVt.model / f.maeVt.cams) * 100}%` }} data-bar />
+              </span>
               <b>{n1(f.maeVt.model)}</b>
             </dd>
           </div>
           <div>
             <dt>{s('ch5.cams')}</dt>
             <dd>
-              <span className={css.barCams} style={{ inlineSize: '100%' }} data-bar />
+              <span className={css.track}>
+                <span className={css.barCams} style={{ inlineSize: '100%' }} data-bar />
+              </span>
               <b>{n1(f.maeVt.cams)}</b>
             </dd>
           </div>
@@ -110,7 +114,7 @@ export function Chapters({ data, slots = {} }: { data: StoryData; slots?: Chapte
         </p>
       </Chapter>
 
-      <Chapter n={6} align="center">
+      <Chapter n={6} align="bottom" wide>
         <p className={css.kicker}>{s('ch6.kicker')}</p>
         <h2 id="ch-6-title" className={css.title} data-split>
           {s('ch6.title')}

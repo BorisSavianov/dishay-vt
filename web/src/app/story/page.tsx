@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Chapters } from '@/components/story/Chapters';
+import { EpisodeClock } from '@/components/story/EpisodeClock';
 import { StoryClient } from '@/components/story/StoryClient';
 import css from '@/components/story/story.module.css';
 import { readEpisode } from '@/lib/aq/episode';
@@ -24,7 +25,7 @@ export default async function StoryPage({ searchParams }: { searchParams: Params
     <main className={css.story} lang={lang}>
       <StoryClient data={data}>
         <div className={css.content}>
-          <Chapters data={data} />
+          <Chapters data={data} slots={{ ch2: <EpisodeClock lang={lang} hourly={data.episodeHourly} /> }} />
         </div>
       </StoryClient>
     </main>

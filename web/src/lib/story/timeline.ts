@@ -32,9 +32,9 @@ const K: Key[] = [
   // 4 We warned the evening before
   { cam: [-5, 4, 8], target: [0.5, 0.5, -0.5], fov: 40, smog: 0.8, dusk: 0.7, sensorsBg: 0, bars: 0, streams: 0, clear: 0 },
   // 5 More accurate than CAMS
-  { cam: [-6, 5, 6], target: [0, 1.5, 0], fov: 40, smog: 0.6, dusk: 0.6, sensorsBg: 0, bars: 1, streams: 0, clear: 0 },
+  { cam: [3.2, 3.1, 9.5], target: [1.6, 2.4, 0.5], fov: 40, smog: 0.6, dusk: 0.6, sensorsBg: 0, bars: 1, streams: 0, clear: 0 },
   // 6 Who pollutes
-  { cam: [0, 7, 9], target: [0, 1, 0], fov: 42, smog: 0.6, dusk: 0.6, sensorsBg: 0, bars: 0, streams: 1, clear: 0 },
+  { cam: [0, 3.4, 11], target: [0, 1.6, 0.5], fov: 42, smog: 0.6, dusk: 0.6, sensorsBg: 0, bars: 0, streams: 1, clear: 0 },
   // 7 Today: the fog clears
   { cam: [7, 6, 11], target: [0, 0, -1], fov: 40, smog: 0, dusk: 0, sensorsBg: 0, bars: 0, streams: 0, clear: 1 },
   // 8 Breathe easy

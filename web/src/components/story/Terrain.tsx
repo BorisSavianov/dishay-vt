@@ -4,7 +4,6 @@ import { useMemo, useRef } from 'react';
 import { useFrame, useLoader } from '@react-three/fiber';
 import { Color, ImageLoader, PlaneGeometry, ShaderMaterial, Float32BufferAttribute } from 'three';
 import terrain from '../../../public/story/terrain.json';
-import { toScene } from '@/lib/story/geo';
 import { sceneStore } from './sceneStore';
 import { atmosphere } from './atmosphere';
 import { SKY_GLSL } from './skyGlsl';
@@ -13,11 +12,11 @@ export const WORLD = 20;
 export const RELIEF = 2.2; // scene units for the full min..max elevation range
 export const GROUND = 40; // the plane is wider than the data: outside it the relief flattens into a skirt
 
-// Veliko Tarnovo centre, for the town lights.
-const [TOWN_X, TOWN_Z] = toScene(43.0757, 25.6172, terrain);
+import { TOWN } from './town';
+const [TOWN_X, TOWN_Z] = TOWN;
 
 // Heights decoded on the CPU (no texture sampling in the shader: filtering and colour space would distort them).
-function heightField(img: HTMLImageElement): { w: number; h: number; data: Uint8ClampedArray } {
+export function heightField(img: HTMLImageElement): { w: number; h: number; data: Uint8ClampedArray } {
   const c = document.createElement('canvas');
   c.width = img.width;
   c.height = img.height;
