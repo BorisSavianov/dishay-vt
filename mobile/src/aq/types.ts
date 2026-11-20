@@ -18,6 +18,7 @@ export type AqDay = {
   pm25_mean: number;
   level: number; // EEA EAQI 1..6
   exceeds_eu_limit: boolean; // PM10 daily mean > 50 µg/m³
+  alert_level?: number; // sent by the live forecast; not in the contract yet
   reasons: AqReason[];
 };
 

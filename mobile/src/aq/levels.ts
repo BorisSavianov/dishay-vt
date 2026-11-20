@@ -104,6 +104,11 @@ export function localDate(d: Date): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+// The level alerts go by: the forecast's alert_level (upper-middle of the band) when sent, else the level.
+export function alertLevelOf(day: AqDay): Level {
+  return clampLevel(day.alert_level ?? day.level);
+}
+
 export type PlannedAlert = { key: string; fireAt: Date; day: AqDay; when: 'today' | 'tomorrow' | 'later' };
 
 // When to warn about each bad day: 19:00 the evening before, or 07:30 the same morning.
@@ -119,7 +124,7 @@ export function planAlerts(
   const tomorrow = localDate(new Date(now.getTime() + 24 * 3600_000));
   const out: PlannedAlert[] = [];
   for (const day of station.daily) {
-    if (!isBadFor(profile, day.level) || day.date < today) continue;
+    if (!isBadFor(profile, alertLevelOf(day)) || day.date < today) continue;
     const key = `${station.id}|${day.date}|${profile}`;
     if (sent.has(key)) continue;
     const [y, m, d] = day.date.split('-').map(Number) as [number, number, number];
