@@ -21,9 +21,7 @@ const GROUPS: { label: MessageKey; items: NavItem[] }[] = [
       { id: 'dashboard', href: '/', label: 'nav.dashboard', tab: 'tab.dashboard', icon: 'home' },
       { id: 'geo', href: '/geographic', label: 'nav.geo', tab: 'tab.map', icon: 'map' },
       { id: 'why', href: '/why', label: 'nav.why', icon: 'trendDown' },
-      { id: 'health', href: '/health', label: 'nav.health', tab: 'tab.health', icon: 'heart' },
       { id: 'ai', href: '/insights', label: 'nav.ai', tab: 'tab.ai', icon: 'sparkle' },
-      { id: 'predict', href: '/predict', label: 'nav.predict', tab: 'tab.predict', icon: 'activity' },
     ],
   },
   {

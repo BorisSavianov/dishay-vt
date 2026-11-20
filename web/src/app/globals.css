@@ -1942,6 +1942,8 @@ button.legend-row[aria-pressed='false'] {
   font-size: 1.6rem;
   color: var(--fg);
   font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Forecast explanation ---------- */
 .explain-card {
   margin-bottom: 18px;
@@ -1973,4 +1975,59 @@ button.legend-row[aria-pressed='false'] {
   padding-left: 1.1em;
   font-size: 0.92rem;
   line-height: 1.5;
+}
+
+/* ---------- Methodology and sources ---------- */
+.levels-table th .level-chip {
+  font-size: 0.82rem;
+  padding: 3px 10px 3px 4px;
+}
+
+.levels-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.sources-table th small {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.sources-table td:last-child {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.live-note {
+  color: var(--fg);
+}
+
+.prose .btn {
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .sources-table thead {
+    display: none;
+  }
+  .sources-table,
+  .sources-table tbody,
+  .sources-table tr,
+  .sources-table th,
+  .sources-table td {
+    display: block;
+  }
+  .sources-table tr {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .sources-table th,
+  .sources-table td {
+    padding: 0;
+    border: 0;
+  }
+  .sources-table td {
+    margin-top: 6px;
+  }
 }
