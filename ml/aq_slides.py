@@ -41,7 +41,14 @@ def main() -> None:
 
     # Slide 6: one bar chart, 24 h ahead, VT and all BG.
     fig, ax = plt.subplots(figsize=(10, 5.6), dpi=150)
-    groups = [("Велико Търново", meta["mae_vt"]), ("цяла България", meta["mae"])]
+    groups = [("Велико Търново\nзима 2025/26", meta["mae_vt"]), ("цяла България\nзима 2025/26", meta["mae"])]
+    sb_path = ROOT / "data" / "processed" / "scoreboard_replay.json"
+    season = None
+    if sb_path.exists():
+        c = json.loads(sb_path.read_text(encoding="utf-8"))
+        season = c["runs"][c["chosen"]]
+        m = season["mae_pm25_next_day"]
+        groups += [("Велико Търново\nноември 2026*", m["vt"]), ("цяла България\nноември 2026*", m["bg"])]
     w = 0.26
     for k, (label, m) in enumerate(groups):
         for j, (key, name, color) in enumerate((("model", "нашият модел", MODEL), ("persistence", "„утре = днес“", PERS),
@@ -52,11 +59,17 @@ def main() -> None:
     ax.set_xticks(range(len(groups)), [g[0] for g in groups], fontsize=14)
     ax.set_ylabel("средна грешка PM2.5, µg/m³ (по-ниско = по-добре)", fontsize=12)
     gain_vt = 100 * (1 - meta["mae_vt"]["model"] / meta["mae_vt"]["cams"])
-    ax.set_title(f"Прогноза 24 ч напред, зима 2025/26: с {gain_vt:.0f}% по-точно от Copernicus за ВТ",
+    ax.set_title(f"Прогноза за утре: с {gain_vt:.0f}% по-точно от Copernicus за ВТ (зима 2025/26)",
                  fontsize=15, loc="left")
-    ax.legend(frameon=False, fontsize=12)
+    if season:
+        blh = ("без прогноза за слоя на смесване" if season["blh"] == "none"
+               else "слоят на смесване е измерен (ERA5)")
+        fig.text(0.01, 0.015, f"* {season['from'][8:]}–{season['to'][8:]}.11.2026, с прогнозата за времето, каквато е била "
+                 f"тогава ({blh}).\n  Модели, обучени преди зима 2025/26: тези седмици не са виждани.", fontsize=10, color=INK)
+    ax.set_ylim(0, 1.15 * max(m[k] for _, m in groups for k in ("model", "persistence", "cams")))
+    ax.legend(frameon=False, fontsize=12, ncol=3, loc="upper left")
     style(ax)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.07 if season else 0, 1, 1))
     fig.savefig(OUT / "mae_24h.png")
 
     # Error by horizon.
@@ -94,6 +107,14 @@ def main() -> None:
         f"≥ 4 (everyone): {rep['vt_alert_days_holdout']['general']['observed']}.",
         "- Top feature groups: " + ", ".join(f"{g['label_en']} {100 * g['share']:.0f}%" for g in meta["importance"][:5]),
     ]
+    if season:
+        sv, sg = season["mae_pm25_next_day"]["vt"], season["mae_pm25_next_day"]["bg"]
+        lines.append(
+            f"- This season ({season['from']} → {season['to']}, {season['days']} days, forecast weather, BLH {season['blh']}"
+            f"{': boundary layer observed' if season['blh'] == 'era5' else ''}), PM2.5 MAE next-day hours: "
+            f"VT model {sv['model']} vs CAMS {sv['cams']} → {100 * (1 - sv['model'] / sv['cams']):.0f}% better "
+            f"(persistence {sv['persistence']}); BG model {sg['model']} vs CAMS {sg['cams']} → "
+            f"{100 * (1 - sg['model'] / sg['cams']):.0f}% better (persistence {sg['persistence']}).")
     if score:
         a, c = score["model_alert"], score["cams"]
         lines.append(

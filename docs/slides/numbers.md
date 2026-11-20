@@ -8,4 +8,5 @@
 - 10–90% band covers 78% of outcomes.
 - VT, winter 2025/26: 6 days with PM10 > 50; days at EAQI ≥ 3 (sensitive alert): 15 of 179; ≥ 4 (everyone): 0.
 - Top feature groups: pollution in the last hours 47%, CAMS forecast 14%, humidity 13%, wind 6%, hour, day, season 5%
+- This season (2026-11-01 → 2026-11-19, 19 days, forecast weather, BLH none), PM2.5 MAE next-day hours: VT model 2.6 vs CAMS 5.2 → 50% better (persistence 3.6); BG model 2.9 vs CAMS 7.8 → 63% better (persistence 4.0).
 - Day-before warnings for sensitive groups in VT (EAQI ≥ 3), 178 days, 23 bad: model caught 18, 11 false alarms; CAMS caught 20, 23 false alarms. On the 10 worst days: model warned 9, CAMS 10.
