@@ -92,7 +92,13 @@ export function withoutHourly(forecast: AqForecast): AqForecast {
   return { ...forecast, stations: forecast.stations.map(({ hourly: _hourly, ...s }) => s) };
 }
 
-// The featured station (Veliko Tarnovo), or the first one.
+// The centre of Veliko Tarnovo. Many stations around the city are featured; the page opens on the one closest
+// to the centre.
+export const VT_CENTRE = { lat: 43.0786, lon: 25.6211 };
+
 export function featuredStation(forecast: AqForecast): AqStation {
-  return forecast.stations.find((s) => s.featured) ?? forecast.stations[0]!;
+  const featured = forecast.stations.filter((s) => s.featured);
+  const list = featured.length > 0 ? featured : forecast.stations;
+  const dist = (s: AqStation) => (s.lat - VT_CENTRE.lat) ** 2 + ((s.lon - VT_CENTRE.lon) * Math.cos((VT_CENTRE.lat * Math.PI) / 180)) ** 2;
+  return list.reduce((best, s) => (dist(s) < dist(best) ? s : best), list[0]!);
 }

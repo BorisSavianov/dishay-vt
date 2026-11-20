@@ -63,6 +63,12 @@ describe('loadForecast', () => {
     expect(isForecast(fallback.forecast)).toBe(true);
   });
 
+  it('opens on the featured station closest to the centre of Veliko Tarnovo', () => {
+    const near = { ...demo.stations[0]!, id: 'near', lat: 43.079, lon: 25.621, featured: true };
+    const far = { ...demo.stations[0]!, id: 'far', lat: 43.124, lon: 25.686, featured: true };
+    expect(featuredStation({ ...demo, stations: [far, near] }).id).toBe('near');
+  });
+
   it('features Veliko Tarnovo and strips hourly for the list', () => {
     expect(featuredStation(demo).city).toBe('Велико Търново');
     expect(withoutHourly(demo).stations.every((s) => s.hourly === undefined)).toBe(true);

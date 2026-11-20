@@ -1,12 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DayCards } from '@/components/aq/DayCards';
+import { ExplainCard } from '@/components/aq/ExplainCard';
 import { ForecastChart } from '@/components/aq/ForecastChart';
 import { LevelChip } from '@/components/aq/Level';
+import { StationPicker } from '@/components/aq/StationPicker';
 import { AppShell } from '@/components/shell/AppShell';
 import { Icon } from '@/components/shell/Icon';
 import { clockLabel, fmtPm, hourLabel, sofiaDate } from '@/lib/aq/format';
 import { levelNow, PROFILES, type Profile } from '@/lib/aq/levels';
+import { t } from '@/lib/i18n';
 import { featuredStation, loadForecast } from '@/lib/aq/load';
 import { advice, air, profileName, type AirKey } from '@/lib/aq/strings';
 import { langOf, withLang } from '@/lib/page';
@@ -36,16 +39,6 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
   const days = station.daily.filter((d) => d.date >= today).slice(0, 3);
   const { mae } = forecast.model;
   const modelReady = source !== 'demo' && mae.model > 0;
-
-  // Stations grouped by city, the featured city first, so the picker reads like a list of places.
-  const featuredCity = featuredStation(forecast).city;
-  const cities = new Map<string, typeof forecast.stations>();
-  for (const s of [...forecast.stations].sort((a, b) => a.name.localeCompare(b.name, 'bg'))) {
-    cities.set(s.city, [...(cities.get(s.city) ?? []), s]);
-  }
-  const groups = [...cities.entries()].sort(
-    ([a], [b]) => Number(b === featuredCity) - Number(a === featuredCity) || a.localeCompare(b, 'bg'),
-  );
 
   return (
     <AppShell
@@ -92,36 +85,7 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
             <p className="air-now-pm">{tr('web.now.none')}</p>
           )}
 
-          <form className="air-picker" method="get" action="/">
-            <input type="hidden" name="lang" value={lang} />
-            <label className="field">
-              <span>{tr('air.station')}</span>
-              <select name="station" defaultValue={station.id}>
-                {groups.map(([city, list]) => (
-                  <optgroup key={city} label={city}>
-                    {list.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>{tr('web.profile')}</span>
-              <select name="profile" defaultValue={profile}>
-                {PROFILES.map((p) => (
-                  <option key={p} value={p}>
-                    {profileName(lang, p)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button className="btn btn-primary" type="submit">
-              {tr('web.station.go')}
-            </button>
-          </form>
+          <StationPicker stations={forecast.stations} station={station.id} profile={profile} lang={lang} action="/" />
         </section>
 
         <aside className="card insight air-model" aria-labelledby="model-title">
@@ -171,6 +135,25 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
       )}
 
       {days.length > 0 && <DayCards days={days} lang={lang} today={today} tomorrow={tomorrow} />}
+
+      <ExplainCard
+        station={station.id}
+        profile={profile}
+        lang={lang}
+        labels={{
+          title: tr('ex.title'),
+          sub: tr('ex.sub'),
+          button: tr('ex.button', { profile: profileName(lang, profile) }),
+          loading: tr('ex.loading'),
+          error: tr('ex.error'),
+          cached: t(lang, 'summary.cached'),
+          provider: {
+            groq: t(lang, 'summary.provider.groq'),
+            gemini: t(lang, 'summary.provider.gemini'),
+            mock: t(lang, 'summary.provider.mock'),
+          },
+        }}
+      />
     </AppShell>
   );
 }
