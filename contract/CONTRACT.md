@@ -122,7 +122,7 @@ Written by `ml/aq_forecast.py` on Teodor's PC every hour, upserted into Neon and
 - `pm25_lo` / `pm25_hi` are the 10th and 90th percentiles. `lo <= pm25 <= hi` always.
 - `level` is the EEA EAQI 1..6 of the daily means: the worse of the PM2.5 and PM10 bands. Band edges: `mobile/src/aq/levels.ts` (`PM25_BANDS`, `PM10_BANDS`); `ml/aq_levels.py` mirrors them and a test fails if they drift. The web should use the same numbers.
 - `exceeds_eu_limit` is `pm10_mean > 50`.
-- `alert_level` (optional, 1..6, always `>= level`): **the level the alerts use.** It is the EAQI of the upper-middle of the forecast band (about the 70th percentile of the day), because missing a smog day costs more than a false alarm. On the winter 2025/26 holdout in VT, day-before warnings at level 3 with `alert_level` caught 18 of 23 bad days with 14 false alarms (CAMS: 20 caught, 23 false; `level`: 9 caught, 4 false). Show `level` as the forecast; decide push alerts and "risky for sensitive groups" badges with `alert_level ?? level`.
+- `alert_level` (optional, 1..6, always `>= level`): **the level the alerts use.** It is the EAQI of the upper-middle of the forecast band (about the 70th percentile of the day), because missing a smog day costs more than a false alarm. On the winter 2025/26 holdout in VT, day-before warnings at level 3 with `alert_level` caught 18 of 23 bad days with 11 false alarms (CAMS: 20 caught, 23 false; `level`: 7 caught, 2 false). Show `level` as the forecast; decide push alerts and "risky for sensitive groups" badges with `alert_level ?? level`.
 - `reasons`: up to 3 per day, largest `|impact|` first. `impact` is the µg/m³ the feature group adds (positive) or removes (negative) from the day's PM2.5. `feature` is one of `pbl_height`, `wind_speed`, `temp`, `rh`, `precip`, `persistence`, `neighbours`, `cams`, `calendar`. `label_en` is optional.
 - Ids: `sc-<sensor.community sensor id>`. `featured` marks the Veliko Tarnovo stations shown first (within 10 km of the centre).
 - Levels: the EEA defines the index on hourly values (airindex.eea.europa.eu, 2024 revision); `daily[].level` applies the same bands to the daily means.
@@ -158,6 +158,21 @@ Each run replaces all rows in one transaction (stations missing from the run are
 
 One `AqStation` with `hourly` (72 items). `404` for an unknown id.
 
+### Web implementation of the two routes
+
+- Both return bare JSON (no `ok` wrapper) plus `source`: `"database"` (Neon), `"bundled"` (`web/src/data/aq_forecast.json`) or `"demo"`. `"demo"` means invented numbers: either `model.kind` is `"mock"`, or neither Neon nor the file has a forecast and the web built one with the same generator as `mobile/src/aq/mock.ts`. A client must label `"demo"` as demo data. The same value is in the `X-Data-Source` header.
+- Unknown station: `404 { "ok": false, "error": { "code": "not_found", "message" } }`.
+- Headers: `Access-Control-Allow-Origin: *`; `Cache-Control: public, s-maxage=300, stale-while-revalidate=600` (errors: `no-store`).
+- Web copies of the types and levels: `web/src/lib/aq/` (`types.ts`, `levels.ts`, `mock.ts`, `strings.ts`). Change band edges in every copy at once.
+- `GET /api/health` also returns `aq: { source, generated_at, model, stations }`.
+
+### Optional model fields (web „Защо?“ page)
+
+All optional; the page hides a block whose field is missing.
+
+- `model.importance`: `[{ group, label_bg, label_en, share }]`, feature importance by reason group, largest first (see "Optional `model` fields" above; an earlier draft called it `importances`).
+- `model.episode`: `{ station_id, date, issued_at, observed: [{ t, pm10 }], predicted: [{ t, pm10 }], cams?: [{ t, pm10 }] }`, one past smog day and the forecast issued the day before it. The ML writer also sends `pm25` per point and the daily and score blocks below.
+
 ### `model.episode` (in every forecast, for the „Защо?“ page)
 
 The day-before forecast of the replayed smog day, in the shape `web/src/lib/aq/types.ts` expects, plus additive fields:
@@ -178,7 +193,7 @@ Written by `python -m ml.aq_episode` (bundled, static). A real smog day in Velik
 
 ```jsonc
 {
-  "date": "2025-12-18", "place": "Велико Търново", "place_en": "Veliko Tarnovo", "sensors": 9, "model": "lgbm-v1",
+  "date": "2025-12-18", "place": "Велико Търново", "place_en": "Veliko Tarnovo", "sensors": 9, "model": "xgb-v2",
   "observed": [ { "t": "2025-12-18T00:00:00+02:00", "pm25": 31.2, "pm10": 70.1 } ],   // 24 hourly, VT city mean
   "cams":     [ { "t": "...", "pm25": 19.0, "pm10": 25.3 } ],                         // CAMS at the same hours
   "observed_daily": { "pm10_mean": 68.9, "pm25_mean": 30.0, "level": 3, "exceeds_eu_limit": true },
@@ -188,17 +203,40 @@ Written by `python -m ml.aq_episode` (bundled, static). A real smog day in Velik
                    "daily": { "pm10_mean": 43.2, "pm25_mean": 23.1, "level": 3, "exceeds_eu_limit": false } },
                  { "days_before": 1, ... } ],
   "score": { "days": 178, "bad_days": 23,                                             // day-before warnings, level >= 3
-             "model_alert": { "hits": 18, "misses": 5, "false_alarms": 14, "pod": 0.78, "far": 0.44 },  // alert_level
-             "model_level": { "hits": 9, "misses": 14, "false_alarms": 4, "pod": 0.39, "far": 0.31 },
+             "model_alert": { "hits": 18, "misses": 5, "false_alarms": 11, "pod": 0.78, "far": 0.38 },  // alert_level
+             "model_level": { "hits": 7, "misses": 16, "false_alarms": 2, "pod": 0.3, "far": 0.22 },
              "cams":  { "hits": 20, "misses": 3, "false_alarms": 23, "pod": 0.87, "far": 0.53 },
-             "worst10": { "model_warned": 6, "cams_warned": 10 } }
+             "worst10": { "model_warned": 9, "cams_warned": 10 } }
 }
 ```
 
-### Web implementation of the two routes
+### `model.scoreboard` (optional, for the „Защо?“ page „Проверка на живо“)
 
-- Both return bare JSON (no `ok` wrapper) plus `source`: `"database"` (Neon), `"bundled"` (`web/src/data/aq_forecast.json`) or `"demo"`. `"demo"` means invented numbers: either `model.kind` is `"mock"`, or neither Neon nor the file has a forecast and the web built one with the same generator as `mobile/src/aq/mock.ts`. A client must label `"demo"` as demo data. The same value is in the `X-Data-Source` header.
-- Unknown station: `404 { "ok": false, "error": { "code": "not_found", "message" } }`.
-- Headers: `Access-Control-Allow-Origin: *`; `Cache-Control: public, s-maxage=300, stale-while-revalidate=600` (errors: `no-store`).
-- Web copies of the types and levels: `web/src/lib/aq/` (`types.ts`, `levels.ts`, `mock.ts`, `strings.ts`). Change band edges in every copy at once.
-- `GET /api/health` also returns `aq: { source, generated_at, model, stations }`.
+Written by `ml/aq_forecast.py` every hour. The two parts are:
+- `replay`: from `python -m ml.aq_scoreboard --replay`, cached on Teodor's PC;
+- `live`: the forecasts logged since the loop started, scored as the readings arrive.
+
+Either part may be missing. When both are missing, the whole field is left out, and it never carries mock numbers. The web hides the section when the field is missing.
+
+```jsonc
+"scoreboard": {
+  "updated_at": "2026-11-20T13:07:00+02:00",
+  "replay": {                              // 1–19 Nov 2026, never seen by the models
+    "from": "2026-11-01", "to": "2026-11-19", "issued_local": "12:00",
+    "models": "trained before winter 2025/26",
+    "weather": "forecast",                 // archived forecast runs (Open-Meteo Previous Runs), never newer than the issue time
+    "blh": "none",                         // "none" = no boundary-layer height at all; "era5" = observed BLH: the page MUST say so
+    "days": 19,
+    "mae_pm25_next_day": { "vt": { "model": 3.4, "cams": 6.0, "persistence": 4.9 },   // µg/m³, hourly PM2.5, next-day hours (12–35 h ahead)
+                           "bg": { "model": 3.0, "cams": 7.7, "persistence": 4.2 } },
+    "vt_days": [ { "date": "2026-11-02", "model_pm10": 41.0, "cams_pm10": 22.0, "observed_pm10": 45.3,
+                   "model_level": 2, "observed_level": 2 } ]          // VT city mean, days with >= 18 observed hours
+  },
+  "live": { "since": "2026-11-20T10:00:00+02:00",   // first logged run
+            "checked_hours": 37,                     // distinct forecast hours that have passed and were scored (>= 1)
+            "horizons": "1–6 h",                     // horizons scored so far
+            "mae_pm25": { "model": 2.1, "cams": 4.0, "persistence": 2.6 } }
+}
+```
+
+All three MAEs are computed over the same hours: an hour counts only when the observation, the model, CAMS and persistence are all present.

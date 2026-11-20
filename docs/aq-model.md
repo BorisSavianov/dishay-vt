@@ -28,7 +28,10 @@ Given the latest readings of a citizen PM sensor, its neighbours, the weather fo
 
 - **Direct multi-horizon.** One model with the horizon (1–72 h) as a feature. The training rows are sensor × issue hour × randomly sampled horizon, with 40% of rows at 1–6 h.
 - **Target:** the change from the last known level, in µg/m³. Boosting starts from persistence, so the short horizons cannot do worse than "now".
-- **LightGBM.** An L1 loss for the point forecast, plus 10% and 90% quantile models for the band. A separate PM10 model.
+- **XGBoost on the GPU (RTX 4070), live as `xgb-v2`.** An L1 loss for the point forecast, plus 10% and 90% quantile models for the band, and a separate PM10 model. All 4 models refit on 5.06M rows in about 2 minutes.
+  - LightGBM on the CPU tied on the same data: 24 h MAE 2.74 against 2.76 for XGBoost. Averaging the two gained nothing.
+  - XGBoost was chosen for VT (3.21 vs 3.25), PM10 > 50 F1, and retraining speed. `ml/models_v1/` keeps the LightGBM v1.
+  - Tried and not shipped: L2 and Huber losses (worse MAE or F1), and upwind-neighbour features (`--upwind`, 2.76 vs 2.76).
 - **Features:**
   - lags 1, 2, 3, 6, 24 and 48 h, the 24 h mean and max, and the same hour on the last observed day;
   - the neighbour mean within 5 km;
@@ -68,4 +71,6 @@ Given the latest readings of a citizen PM sensor, its neighbours, the weather fo
 - Training uses observed weather (ERA5), while live forecasts use forecast weather, so live errors will be somewhat larger than the holdout numbers.
 - Citizen sensors are not reference instruments. The humidity correction is a published approximation, not a calibration against an official station.
 - The model is trained on heating seasons only. Summer (ozone and dust events) is out of scope.
-- Day-before warnings: the point forecast is conservative on the very worst days. See the warning score in `aq_episode.json` and the slide numbers.
+- Day-before warnings: the point forecast (`level`) is conservative on smog days. It caught 7 of 23 bad VT days.
+  - Alerts therefore use `alert_level`, the upper-middle of the band (about the 70th percentile).
+  - With it the model caught 18 of 23 with 11 false alarms. CAMS caught 20 of 23 with 23 false alarms.

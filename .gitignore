@@ -24,3 +24,4 @@ ml/reports/
 # trained AQ models (large; the forecast loop runs locally)
 ml/models/
 ml/models_exp/
+ml/models_v1/

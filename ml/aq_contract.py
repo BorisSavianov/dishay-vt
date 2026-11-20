@@ -18,6 +18,30 @@ def _iso(s) -> bool:
         return False
 
 
+def scoreboard_errors(sb) -> list[str]:
+    """model.scoreboard (CONTRACT.md): replay and live are each optional."""
+    p = "model.scoreboard"
+    if not isinstance(sb, dict):
+        return [f"{p}: object required"]
+    errors: list[str] = []
+    trio = ("model", "cams", "persistence")
+    replay = sb.get("replay")
+    if replay is not None:
+        if replay.get("blh") not in ("none", "era5"):
+            errors.append(f"{p}.replay.blh: 'none' or 'era5' required")
+        for area in ("vt", "bg"):
+            m = (replay.get("mae_pm25_next_day") or {}).get(area) or {}
+            errors += [f"{p}.replay.mae_pm25_next_day.{area}.{k}: number required" for k in trio if not _num(m.get(k))]
+    live = sb.get("live")
+    if live is not None:
+        n = live.get("checked_hours")
+        if not (isinstance(n, int) and not isinstance(n, bool) and n >= 1):
+            errors.append(f"{p}.live.checked_hours: int >= 1 required")
+        m = live.get("mae_pm25") or {}
+        errors += [f"{p}.live.mae_pm25.{k}: number required" for k in trio if not _num(m.get(k))]
+    return errors
+
+
 def validate(payload: dict) -> list[str]:
     errors: list[str] = []
     if not _iso(payload.get("generated_at")):
@@ -29,6 +53,8 @@ def validate(payload: dict) -> list[str]:
     for key in ("model", "cams", "persistence"):
         if not _num((model.get("mae") or {}).get(key)):
             errors.append(f"model.mae.{key}: number required")
+    if "scoreboard" in model:
+        errors += scoreboard_errors(model["scoreboard"])
     stations = payload.get("stations")
     if not isinstance(stations, list) or not stations:
         return errors + ["stations: non-empty list required"]
