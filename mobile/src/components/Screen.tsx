@@ -1,8 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { air } from '../aq/strings';
 import { useColorMode, useColors } from '../lib/color-mode';
 import { useLang } from '../lib/lang';
@@ -10,128 +9,112 @@ import { CONTENT_MAX, useLayout } from '../lib/layout';
 import { ui } from '../lib/ui-strings';
 import { fmtDate } from '../shared/format';
 import { t } from '../shared/i18n';
+import { backdropPoster, type TabId } from '../theme/look';
+import { Backdrop } from './Backdrop';
 import { Glass } from './Glass';
+import { GradientTitle } from './GradientTitle';
 import { BrandMark, Icon } from './Icon';
-
-// Soft colour fields behind the content, so the glass cards have something to refract.
-// Sized from the window, not absoluteFill: an SVG laid out once keeps its first size, so a tab that was open
-// while the iPhone Duo unfolded kept the narrow backdrop. The key redraws it on every window size.
-function Backdrop({ accent }: { accent?: string }) {
-  const { mode, colors: c } = useColorMode();
-  const { width, height } = useWindowDimensions();
-  const a = accent ?? c.accent;
-  const o = mode === 'dark' ? 0.35 : 0.22;
-  return (
-    <Svg key={`${width}x${height}`} width={width} height={height} style={styles.backdrop} pointerEvents="none">
-      <Defs>
-        <RadialGradient id="g1" cx="12%" cy="8%" r="60%">
-          <Stop offset="0" stopColor={a} stopOpacity={o} />
-          <Stop offset="1" stopColor={a} stopOpacity={0} />
-        </RadialGradient>
-        <RadialGradient id="g2" cx="95%" cy="45%" r="55%">
-          <Stop offset="0" stopColor={c.points.pharmacy} stopOpacity={o * 0.7} />
-          <Stop offset="1" stopColor={c.points.pharmacy} stopOpacity={0} />
-        </RadialGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill="url(#g1)" />
-      <Rect width="100%" height="100%" fill="url(#g2)" />
-    </Svg>
-  );
-}
+import { RevealProvider, useRevealScroll } from './Reveal';
 
 // The frame every tab shares: the brand bar with the language and theme switches, then the page title.
 // Safe areas apply on every side, since the iPhone Duo's camera cuts into one corner, not the top centre.
+// `tab` picks the story still behind the page; `smog` (0..1) hazes it, for the air tab's current level.
 export function Screen({
   title,
   lead,
   updated,
-  accent,
+  tab,
+  smog = 0,
   children,
 }: {
   title: string;
   lead?: string;
   updated?: string | null;
-  accent?: string;
+  tab: TabId;
+  smog?: number;
   children: ReactNode;
 }) {
   const c = useColors();
   const { lang, setLang } = useLang();
   const { mode, toggle } = useColorMode();
-  const { gutter, compact } = useLayout();
+  const { gutter, compact, height } = useLayout();
+  const reveal = useRevealScroll(height);
 
   return (
     <View style={[styles.root, { backgroundColor: c.bg }]}>
-      <Backdrop accent={accent} />
-      <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-        <ScrollView
-          contentContainerStyle={[styles.content, { padding: gutter, gap: gutter }]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          contentInsetAdjustmentBehavior="automatic"
-        >
-          <View style={styles.bar}>
-            <View style={styles.brand}>
-              <BrandMark size={compact ? 24 : 28} />
-              <Text style={[styles.brandText, { color: c.fg }]} numberOfLines={1}>
-                {air(lang, 'brand.name')}
-              </Text>
-            </View>
-            <View style={styles.controls}>
-              <Glass fallback={c.card2} style={[styles.seg, { borderColor: c.line }]}>
-                <View style={styles.segRow} accessibilityRole="radiogroup">
-                  {(['bg', 'en'] as const).map((code) => {
-                    const on = lang === code;
-                    return (
-                      <Pressable
-                        key={code}
-                        onPress={() => setLang(code)}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: on }}
-                        accessibilityLabel={t(lang, code === 'bg' ? 'lang.bg' : 'lang.en')}
-                        style={[styles.segItem, on && { backgroundColor: c.accent }]}
-                      >
-                        <Text style={[styles.segText, { color: on ? c.onAccent : c.muted }]}>{code.toUpperCase()}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </Glass>
-              <Glass fallback={c.card} interactive style={[styles.iconButton, { borderColor: c.line }]}>
-                <Pressable
-                  onPress={() => {
-                    void Haptics.selectionAsync();
-                    toggle();
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${ui(lang, 'mode.toggle')}: ${ui(lang, mode === 'dark' ? 'mode.light' : 'mode.dark')}`}
-                  style={styles.iconHit}
-                >
-                  <Icon name={mode === 'dark' ? 'sun' : 'moon'} color={c.fg} size={20} />
-                </Pressable>
-              </Glass>
-            </View>
-          </View>
-
-          <View style={styles.head}>
-            <Text style={[styles.eyebrow, { color: c.muted }]}>{air(lang, 'brand.tagline').toUpperCase()}</Text>
-            <Text style={[styles.title, { color: c.fg }, compact && styles.titleCompact]} accessibilityRole="header">
-              {title}
-            </Text>
-            {lead ? <Text style={[styles.lead, { color: c.muted }]}>{lead}</Text> : null}
-            {updated ? (
-              <View style={[styles.pill, { backgroundColor: c.card2, borderColor: c.line }]}>
-                <Icon name="refresh" color={c.muted} size={16} />
-                <Text style={[styles.pillText, { color: c.muted }]}>
-                  {t(lang, 'updated.label', { date: fmtDate(lang, updated) })}
+      <Backdrop poster={backdropPoster(tab, mode)} smog={smog} />
+      <RevealProvider state={reveal.state}>
+        <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
+          <ScrollView
+            onScroll={reveal.onScroll}
+            scrollEventThrottle={32}
+            contentContainerStyle={[styles.content, { padding: gutter, gap: gutter }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            contentInsetAdjustmentBehavior="automatic"
+          >
+            <View style={styles.bar}>
+              <View style={styles.brand}>
+                <BrandMark size={compact ? 24 : 28} />
+                <Text style={[styles.brandText, { color: c.fg }]} numberOfLines={1}>
+                  {air(lang, 'brand.name')}
                 </Text>
               </View>
-            ) : null}
-          </View>
+              <View style={styles.controls}>
+                <Glass fallback={c.glass} style={[styles.seg, { borderColor: c.line }]}>
+                  <View style={styles.segRow} accessibilityRole="radiogroup">
+                    {(['bg', 'en'] as const).map((code) => {
+                      const on = lang === code;
+                      return (
+                        <Pressable
+                          key={code}
+                          onPress={() => setLang(code)}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: on }}
+                          accessibilityLabel={t(lang, code === 'bg' ? 'lang.bg' : 'lang.en')}
+                          style={[styles.segItem, on && [styles.segOn, { backgroundColor: c.accent, shadowColor: c.accent }]]}
+                        >
+                          <Text style={[styles.segText, { color: on ? c.onAccent : c.muted }]}>{code.toUpperCase()}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </Glass>
+                <Glass fallback={c.glass} interactive style={[styles.iconButton, { borderColor: c.line }]}>
+                  <Pressable
+                    onPress={() => {
+                      void Haptics.selectionAsync();
+                      toggle();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${ui(lang, 'mode.toggle')}: ${ui(lang, mode === 'dark' ? 'mode.light' : 'mode.dark')}`}
+                    style={styles.iconHit}
+                  >
+                    <Icon name={mode === 'dark' ? 'sun' : 'moon'} color={c.fg} size={20} />
+                  </Pressable>
+                </Glass>
+              </View>
+            </View>
 
-          {children}
-        </ScrollView>
-      </SafeAreaView>
+            <View style={styles.head}>
+              <Text style={[styles.eyebrow, { color: c.muted }]}>{air(lang, 'brand.tagline').toUpperCase()}</Text>
+              <GradientTitle style={[styles.title, compact && styles.titleCompact]}>{title}</GradientTitle>
+              {lead ? <Text style={[styles.lead, { color: c.muted }]}>{lead}</Text> : null}
+              {updated ? (
+                <View style={[styles.pill, { backgroundColor: c.glass, borderColor: c.line }]}>
+                  <Icon name="refresh" color={c.muted} size={16} />
+                  <Text style={[styles.pillText, { color: c.muted }]}>
+                    {t(lang, 'updated.label', { date: fmtDate(lang, updated) })}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            {children}
+          </ScrollView>
+        </SafeAreaView>
+      </RevealProvider>
     </View>
   );
 }
@@ -147,13 +130,16 @@ const styles = StyleSheet.create({
   seg: { borderRadius: 14, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   segRow: { flexDirection: 'row', padding: 3 },
   segItem: { minWidth: 40, minHeight: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 11 },
+  // The active pill glows softly, like the web sidebar's current page.
+  segOn: { shadowOpacity: 0.6, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
   segText: { fontSize: 13, fontWeight: '700' },
   iconButton: { width: 44, height: 44, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   iconHit: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   head: { gap: 6 },
-  eyebrow: { fontSize: 12, fontWeight: '600', letterSpacing: 1.6 },
-  title: { fontSize: 34, fontWeight: '800', letterSpacing: -0.8 },
-  titleCompact: { fontSize: 28 },
+  // The story's small uppercase tracking and its tight, heavy headline (web .eyebrow, .page-title).
+  eyebrow: { fontSize: 12, fontWeight: '600', letterSpacing: 2.2 },
+  title: { fontSize: 36, lineHeight: 40, fontWeight: '800', letterSpacing: -1.2, marginTop: 2 },
+  titleCompact: { fontSize: 29, lineHeight: 33, letterSpacing: -0.9 },
   lead: { fontSize: 15, lineHeight: 22 },
   pill: {
     alignSelf: 'flex-start',

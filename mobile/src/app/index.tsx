@@ -3,19 +3,22 @@ import { router } from 'expo-router';
 import { useEffect, useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { testAlert } from '../aq/alerts';
-import { bestWindow, clampLevel, LEVEL_COLORS, levelNow, levelTextColor, localDate, type Level } from '../aq/levels';
+import { bestWindow, clampLevel, levelNow, localDate, type Level } from '../aq/levels';
 import { freshness, isCleanDay, showSources, sourcesLine } from '../aq/sources';
 import { useAir } from '../aq/store';
 import { advice, air, levelName, profileName } from '../aq/strings';
+import { CountUp } from '../components/CountUp';
 import { Card, CardTitle, Columns, Note } from '../components/Card';
 import { ExplainCard } from '../components/ExplainCard';
 import { ForecastChart } from '../components/ForecastChart';
 import { Icon } from '../components/Icon';
+import { LevelChip } from '../components/LevelChip';
 import { Screen } from '../components/Screen';
 import { useColors } from '../lib/color-mode';
 import { useLang } from '../lib/lang';
 import { useLayout } from '../lib/layout';
 import type { Lang } from '../shared/types';
+import { smogForLevel } from '../theme/look';
 
 function hhmm(iso: string): string {
   const d = new Date(iso);
@@ -34,7 +37,13 @@ function FreshLine({ generatedAt, now, lang }: { generatedAt: string; now: Date;
   const c = useColors();
   const f = freshness(generatedAt, now);
   if (f.stale) return <Text style={[styles.live, { color: c.warn }]}>{air(lang, 'air.stale', { time: f.time })}</Text>;
-  return <Text style={[styles.live, { color: c.muted }]}>{air(lang, f.today ? 'air.live.today' : 'air.live', { time: f.time })}</Text>;
+  return (
+    <View style={styles.liveRow}>
+      {/* The story's warm daylight marks "now", sparingly. */}
+      <View style={[styles.liveDot, { backgroundColor: c.warm, shadowColor: c.warm }]} />
+      <Text style={[styles.live, { color: c.muted }]}>{air(lang, f.today ? 'air.live.today' : 'air.live', { time: f.time })}</Text>
+    </View>
+  );
 }
 
 // The home tab: the home station's air now, the 72-hour forecast, the next days with reasons,
@@ -56,7 +65,7 @@ export default function AirScreen() {
 
   if (!forecast || !home) {
     return (
-      <Screen title={air(lang, 'air.title')} lead={air(lang, 'air.lead')}>
+      <Screen tab="air" title={air(lang, 'air.title')} lead={air(lang, 'air.lead')}>
         <ActivityIndicator color={c.accent} style={{ marginTop: 40 }} />
       </Screen>
     );
@@ -65,7 +74,7 @@ export default function AirScreen() {
   const level: Level | null = current?.level ?? null;
 
   return (
-    <Screen title={air(lang, 'air.title')} lead={air(lang, 'air.lead')} accent={level ? LEVEL_COLORS[level] : undefined}>
+    <Screen tab="air" smog={smogForLevel(level)} title={air(lang, 'air.title')} lead={air(lang, 'air.lead')}>
       {source === 'demo' ? (
         <Pressable
           onPress={refresh}
@@ -83,38 +92,40 @@ export default function AirScreen() {
         columns={columns}
         left={
           <>
-            {/* The headline card: level colour, number, advice for this profile. */}
-            <View
-              style={[styles.hero, { backgroundColor: level ? LEVEL_COLORS[level] : c.card2 }]}
-              accessible
-              accessibilityLabel={
-                level && current
-                  ? `${home.name}: ${levelName(lang, level)}, PM2.5 ${Math.round(current.pm25)}. ${advice(lang, prefs.profile, level)}`
-                  : home.name
-              }
-            >
-              <Pressable onPress={() => router.navigate('/profile')} style={styles.heroTop} accessibilityRole="button">
-                <Text style={[styles.heroPlace, { color: level ? levelTextColor(level) : c.fg }]} numberOfLines={1}>
-                  {home.name}
-                </Text>
-                <Text style={[styles.heroChange, { color: level ? levelTextColor(level) : c.fg }]}>
-                  {profileName(lang, prefs.profile)} · {air(lang, 'air.change')}
-                </Text>
-              </Pressable>
-              {level && current ? (
-                <>
-                  <Text style={[styles.heroLevel, { color: levelTextColor(level) }]}>{levelName(lang, level)}</Text>
-                  <View style={styles.heroNums}>
-                    <Text style={[styles.heroNum, { color: levelTextColor(level) }]}>{Math.round(current.pm25)}</Text>
-                    <Text style={[styles.heroUnit, { color: levelTextColor(level) }]}>
-                      µg/m³ PM2.5{'\n'}
-                      {air(lang, current.measured ? 'air.now.measured' : 'air.now.forecast')}
-                    </Text>
-                  </View>
-                  <Text style={[styles.heroAdvice, { color: levelTextColor(level) }]}>{advice(lang, prefs.profile, level)}</Text>
-          </>
-        ) : null}
-      </View>
+            {/* The headline card, as the web's /now: glass over the hazy valley, the level chip, the number, the advice. */}
+            <Card>
+              <View
+                style={styles.heroBody}
+                accessible
+                accessibilityLabel={
+                  level && current
+                    ? `${home.name}: ${levelName(lang, level)}, PM2.5 ${Math.round(current.pm25)}. ${advice(lang, prefs.profile, level)}`
+                    : home.name
+                }
+              >
+                <Pressable onPress={() => router.navigate('/profile')} style={styles.heroTop} accessibilityRole="button">
+                  <Text style={[styles.heroEyebrow, { color: c.muted }]} numberOfLines={1}>
+                    {home.name.toUpperCase()}
+                  </Text>
+                  <Text style={[styles.heroChange, { color: c.accentStrong }]}>
+                    {profileName(lang, prefs.profile)} · {air(lang, 'air.change')}
+                  </Text>
+                </Pressable>
+                {level && current ? (
+                  <>
+                    <LevelChip level={level} lang={lang} big />
+                    <View style={styles.heroNums}>
+                      <CountUp value={Math.round(current.pm25)} style={[styles.heroNum, { color: c.fg }]} />
+                      <Text style={[styles.heroUnit, { color: c.muted }]}>
+                        µg/m³ PM2.5{'\n'}
+                        {air(lang, current.measured ? 'air.now.measured' : 'air.now.forecast')}
+                      </Text>
+                    </View>
+                    <Text style={[styles.heroAdvice, { color: c.fg }]}>{advice(lang, prefs.profile, level)}</Text>
+                  </>
+                ) : null}
+              </View>
+            </Card>
 
       <Card>
         <CardTitle title={air(lang, 'air.best.title')} />
@@ -135,7 +146,7 @@ export default function AirScreen() {
             : air(lang, 'air.alerts.off')}
         </Text>
         {!alerts.allowed ? (
-          <Pressable onPress={enableAlerts} accessibilityRole="button" style={[styles.button, { backgroundColor: c.accent }]}>
+          <Pressable onPress={enableAlerts} accessibilityRole="button" style={[styles.button, styles.primary, { backgroundColor: c.accent, shadowColor: c.accent }]}>
             <Text style={[styles.buttonText, { color: c.onAccent }]}>{air(lang, 'air.alerts.enable')}</Text>
           </Pressable>
         ) : null}
@@ -145,7 +156,7 @@ export default function AirScreen() {
             void testAlert(lang, home, prefs.profile);
           }}
           accessibilityRole="button"
-          style={({ pressed }) => [styles.button, styles.ghost, { borderColor: c.line, backgroundColor: c.card }, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.button, styles.ghost, { borderColor: c.line, backgroundColor: c.glass }, pressed && { opacity: 0.7 }]}
         >
           <Text style={[styles.buttonText, { color: c.fg }]}>{air(lang, 'air.alerts.test')}</Text>
         </Pressable>
@@ -175,11 +186,9 @@ export default function AirScreen() {
                 {home.daily.map((d, i) => {
                   const lv = clampLevel(d.level);
                   return (
-                    <View key={d.date} style={[styles.day, { borderColor: c.line, backgroundColor: c.card2 }]}>
+                    <View key={d.date} style={[styles.day, { borderColor: c.line }]}>
                       <View style={styles.dayHead}>
-                        <View style={[styles.dayBadge, { backgroundColor: LEVEL_COLORS[lv] }]}>
-                          <Text style={[styles.dayBadgeText, { color: levelTextColor(lv) }]}>{levelName(lang, lv)}</Text>
-                        </View>
+                        <LevelChip level={lv} lang={lang} />
                         <Text style={[styles.dayName, { color: c.fg }]}>{dayLabel(lang, d.date, now)}</Text>
                         <Text style={[styles.dayPm, { color: c.muted }]}>PM10 {Math.round(d.pm10_mean)}</Text>
                       </View>
@@ -218,27 +227,28 @@ const styles = StyleSheet.create({
   banner: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1 },
   bannerText: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
   live: { fontSize: 13, fontWeight: '600' },
-  hero: { borderRadius: 26, padding: 20, gap: 6 },
+  liveRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  liveDot: { width: 8, height: 8, borderRadius: 4, shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } },
+  heroBody: { gap: 10 },
   heroTop: { gap: 2 },
-  heroPlace: { fontSize: 16, fontWeight: '700' },
-  heroChange: { fontSize: 12.5, fontWeight: '600', opacity: 0.85 },
-  heroLevel: { fontSize: 30, fontWeight: '800', marginTop: 8, letterSpacing: -0.6 },
+  heroEyebrow: { fontSize: 12, fontWeight: '600', letterSpacing: 2.2 },
+  heroChange: { fontSize: 13, fontWeight: '600' },
   heroNums: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
-  heroNum: { fontSize: 64, fontWeight: '800', letterSpacing: -2, lineHeight: 68 },
-  heroUnit: { fontSize: 13, fontWeight: '600', marginBottom: 10, opacity: 0.9 },
-  heroAdvice: { fontSize: 16, fontWeight: '600', lineHeight: 22, marginTop: 4 },
+  heroNum: { fontSize: 64, fontWeight: '800', letterSpacing: -2.4, lineHeight: 68 },
+  heroUnit: { fontSize: 13, fontWeight: '600', marginBottom: 10 },
+  heroAdvice: { fontSize: 16, fontWeight: '600', lineHeight: 23 },
   best: { fontSize: 16, lineHeight: 22 },
-  day: { gap: 6, padding: 12, borderRadius: 16, borderWidth: 1 },
+  day: { gap: 6, padding: 12, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
   dayHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dayBadge: { borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
-  dayBadgeText: { fontSize: 12.5, fontWeight: '800' },
   dayName: { flex: 1, fontSize: 15, fontWeight: '700', textTransform: 'capitalize' },
   dayPm: { fontSize: 13, fontWeight: '600' },
   eu: { fontSize: 13, fontWeight: '700' },
   why: { fontSize: 13, lineHeight: 18 },
   clean: { fontSize: 13.5, fontWeight: '600', lineHeight: 18 },
   button: { minHeight: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  ghost: { borderWidth: 1 },
+  ghost: { borderWidth: StyleSheet.hairlineWidth },
+  // The accent button glows softly, as the web's current nav pill.
+  primary: { shadowOpacity: 0.55, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
   buttonText: { fontSize: 15, fontWeight: '700' },
   link: { minHeight: 36, justifyContent: 'center' },
   linkText: { fontSize: 15, fontWeight: '700' },

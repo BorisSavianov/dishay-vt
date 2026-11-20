@@ -1,14 +1,25 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Appearance } from 'react-native';
-import { palettes, type Mode, type Palette } from '../theme/palette';
+import { DEFAULT_MODE, palettes, type Mode, type Palette } from '../theme/palette';
 
 type ModeState = { mode: Mode; colors: Palette; toggle: () => void };
 
 const ColorModeContext = createContext<ModeState | null>(null);
+const THEME_KEY = 'theme';
 
-// Light by default, as in the design. The header toggle switches to dark.
+// Dusk by default, as on the web; "day" (light) only when the user chose it. The choice is kept, like the web's
+// localStorage 'theme' (same 'light' | 'dark' values).
 export function ColorModeProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<Mode>('light');
+  const [mode, setMode] = useState<Mode>(DEFAULT_MODE);
+
+  useEffect(() => {
+    AsyncStorage.getItem(THEME_KEY)
+      .then((saved) => {
+        if (saved === 'light' || saved === 'dark') setMode(saved);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     // Also sets the system appearance, so the native bars and their glass follow the app's mode.
@@ -19,7 +30,12 @@ export function ColorModeProvider({ children }: { children: ReactNode }) {
     () => ({
       mode,
       colors: palettes[mode],
-      toggle: () => setMode((m) => (m === 'dark' ? 'light' : 'dark')),
+      toggle: () =>
+        setMode((m) => {
+          const next: Mode = m === 'dark' ? 'light' : 'dark';
+          AsyncStorage.setItem(THEME_KEY, next).catch(() => {});
+          return next;
+        }),
     }),
     [mode],
   );

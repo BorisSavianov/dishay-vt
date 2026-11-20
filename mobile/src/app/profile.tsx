@@ -55,7 +55,7 @@ export default function ProfileScreen() {
               onPress={() => setStationId(s.id)}
               accessibilityRole="radio"
               accessibilityState={{ selected: on }}
-              style={[styles.row, { backgroundColor: on ? c.accentSoft : c.card, borderColor: on ? c.accent : c.line }]}
+              style={[styles.row, { backgroundColor: on ? c.accentSoft : 'transparent', borderColor: on ? c.accent : c.line }]}
             >
               <View style={[styles.dot, { backgroundColor: now ? LEVEL_COLORS[now.level] : c.line }]} />
               <View style={{ flex: 1 }}>
@@ -71,7 +71,7 @@ export default function ProfileScreen() {
   );
 
   return (
-    <Screen title={air(lang, 'air.profile.title')} lead={air(lang, 'air.profile.lead')}>
+    <Screen tab="profile" title={air(lang, 'air.profile.title')} lead={air(lang, 'air.profile.lead')}>
       <Columns
         columns={columns}
         left={
@@ -91,7 +91,7 @@ export default function ProfileScreen() {
                       accessibilityState={{ selected: on }}
                       style={[
                         styles.chip,
-                        { backgroundColor: on ? c.accentSoft : c.card2, borderColor: on ? c.accent : c.line },
+                        { backgroundColor: on ? c.accentSoft : 'transparent', borderColor: on ? c.accent : c.line },
                       ]}
                     >
                       <Text style={styles.emoji}>{PROFILE_ICONS[p]}</Text>
@@ -104,7 +104,7 @@ export default function ProfileScreen() {
             <Pressable
               onPress={save}
               accessibilityRole="button"
-              style={({ pressed }) => [styles.save, { backgroundColor: c.accent }, pressed && { opacity: 0.8 }]}
+              style={({ pressed }) => [styles.save, { backgroundColor: c.accent, shadowColor: c.accent }, pressed && { opacity: 0.8 }]}
             >
               <Text style={[styles.saveText, { color: c.onAccent }]}>{air(lang, 'air.profile.save')}</Text>
             </Pressable>
@@ -127,6 +127,16 @@ const styles = StyleSheet.create({
   dot: { width: 14, height: 14, borderRadius: 7 },
   rowTitle: { fontSize: 15, fontWeight: '600' },
   rowSub: { fontSize: 12.5 },
-  save: { minHeight: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  // The accent button glows softly, as the web's current nav pill.
+  save: {
+    minHeight: 54,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOpacity: 0.55,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
   saveText: { fontSize: 17, fontWeight: '800' },
 });

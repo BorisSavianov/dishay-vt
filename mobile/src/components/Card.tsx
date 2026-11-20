@@ -3,18 +3,23 @@ import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-na
 import { useColors } from '../lib/color-mode';
 import { Glass } from './Glass';
 import { Icon, type IconName } from './Icon';
+import { Reveal } from './Reveal';
 
+// The story's glass card (web .card): translucent over the sky, a faint hairline, and a light line on the top edge
+// where glass catches the sky. Liquid Glass on iOS 26+. Cards below the first screen rise in once (Reveal).
 export function Card({ children, soft = false, style }: { children: ReactNode; soft?: boolean; style?: StyleProp<ViewStyle> }) {
   const c = useColors();
-  // Liquid Glass on iOS 26+; the solid card with its hairline border elsewhere.
   return (
-    <Glass
-      fallback={soft ? c.accentSoft : c.card}
-      tint={soft ? c.accentSoft : undefined}
-      style={[styles.card, { borderColor: soft ? 'transparent' : c.line }, style]}
-    >
-      {children}
-    </Glass>
+    <Reveal>
+      <Glass
+        fallback={soft ? c.accentSoft : c.glass}
+        tint={soft ? c.accentSoft : undefined}
+        style={[styles.card, { borderColor: soft ? 'transparent' : c.line }, style]}
+      >
+        <View style={[styles.edge, { backgroundColor: c.glassEdge }]} pointerEvents="none" />
+        {children}
+      </Glass>
+    </Reveal>
   );
 }
 
@@ -72,7 +77,7 @@ export function Kpi({
   const c = useColors();
   return (
     <View
-      style={[styles.kpi, { backgroundColor: primary ? c.accentSoft : c.card, borderColor: primary ? 'transparent' : c.line }]}
+      style={[styles.kpi, { backgroundColor: primary ? c.accentSoft : c.glass, borderColor: primary ? 'transparent' : c.line }]}
       accessible
       accessibilityLabel={`${label}: ${value}. ${delta ? delta.text + '. ' : ''}${sub}`}
     >
@@ -98,7 +103,8 @@ export function Kpi({
 }
 
 const styles = StyleSheet.create({
-  card: { gap: 14, padding: 18, borderRadius: 26, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  card: { gap: 14, padding: 18, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  edge: { position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth * 2 },
   cols: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
   col: { flex: 1, gap: 16, minWidth: 0 },
   title: { fontSize: 19, fontWeight: '700', letterSpacing: -0.2 },

@@ -5,6 +5,7 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",
+    "@react-native-masked-view/masked-view": "0.3.2",
     "@shopify/react-native-skia": "2.14.0",
     "expo": "~58.0.25",
     "expo-constants": "~58.0.16",
@@ -39,7 +40,7 @@
     "prebuild": "expo prebuild",
     "sync": "node scripts/sync-shared.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/aq/levels.test.ts src/aq/sources.test.ts src/lib/api.test.ts src/lib/ui-strings.test.ts src/lib/map-math.test.ts src/theme/palette.test.ts src/theme/tokens-parity.test.ts"
+    "test": "tsx --test src/aq/levels.test.ts src/aq/sources.test.ts src/lib/api.test.ts src/lib/ui-strings.test.ts src/lib/map-math.test.ts src/theme/palette.test.ts src/theme/tokens-parity.test.ts src/theme/look.test.ts"
   },
   "private": true
 }
