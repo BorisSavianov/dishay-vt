@@ -201,6 +201,14 @@ const bg = {
   's.eurostat': 'Преждевременни смъртни случаи от PM2.5, България и ЕС.',
   's.tiles': 'Подложката на картата.',
   's.live': 'Живата прогноза: {model}, {stations} станции, от {time}.',
+  'sb.title': 'Проверка на живо',
+  'sb.headline': 'Този сезон, с реалната прогноза за времето: {pct}% по-точно от CAMS за Велико Търново',
+  'sb.note.none': 'Без прогноза за слоя на смесване – и пак по-точно от CAMS. Модели, обучени преди зима 2025/26.',
+  'sb.note.era5': 'Слоят на смесване е измерен (ERA5), не прогнозен – единственото изключение от реалната прогноза.',
+  'sb.live': 'На живо от {time}: {hours} проверени часа ({horizons} напред) · средна грешка {model} µg/m³, CAMS {cams}',
+  'sb.sub': 'Прогнози, издадени всеки ден в 12:00 от {from} до {to}, проверени срещу измереното на следващия ден. PM2.5, µg/m³; по-късата лента е по-добре.',
+  'sb.days.title': 'Велико Търново ден по ден, PM10 (µg/m³)',
+  'sb.observed': 'Измерено',
 } as const;
 
 export type AirKey = keyof typeof bg;
@@ -403,6 +411,14 @@ const en: Record<AirKey, string> = {
   's.eurostat': 'Premature deaths from PM2.5, Bulgaria and the EU.',
   's.tiles': 'The map background.',
   's.live': 'The live forecast: {model}, {stations} stations, from {time}.',
+  'sb.title': 'Live check',
+  'sb.headline': 'This season, with the real weather forecast: {pct}% more accurate than CAMS for Veliko Tarnovo',
+  'sb.note.none': 'No forecast for the mixing layer, and still more accurate than CAMS. Models trained before winter 2025/26.',
+  'sb.note.era5': 'The mixing layer is observed (ERA5), not forecast: the only exception to the real forecast.',
+  'sb.live': 'Live since {time}: {hours} checked hours ({horizons} ahead) · mean error {model} µg/m³, CAMS {cams}',
+  'sb.sub': 'Forecasts issued every day at 12:00 from {from} to {to}, checked against what was measured the next day. PM2.5, µg/m³; a shorter bar is better.',
+  'sb.days.title': 'Veliko Tarnovo day by day, PM10 (µg/m³)',
+  'sb.observed': 'Measured',
 };
 
 const table: Record<Lang, Record<AirKey, string>> = { bg, en };
