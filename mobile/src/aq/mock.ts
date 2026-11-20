@@ -61,13 +61,15 @@ export function demoForecast(now = new Date()): AqForecast {
       });
     }
 
+    // Contract: daily covers tomorrow, +2 and +3; the last day reaches past the 72 hours, so it is built per hour here.
     const daily: AqDay[] = [];
-    for (let d = 0; d < 3; d++) {
-      const date = localDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() + d));
-      const hours = hourly.filter((h) => localDate(new Date(h.t)) === date);
-      if (!hours.length) continue;
-      const pm25 = hours.reduce((a, h) => a + h.pm25, 0) / hours.length;
-      const pm10 = hours.reduce((a, h) => a + h.pm10, 0) / hours.length;
+    for (let d = 1; d <= 3; d++) {
+      const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() + d);
+      const date = localDate(day);
+      let sum25 = 0;
+      for (let h = 0; h < 24; h++) sum25 += 11 * s.base * diurnal(h) * episode(d) * (1 + 0.08 * Math.sin(h * 0.9 + si));
+      const pm25 = sum25 / 24;
+      const pm10 = pm25 * 1.55;
       daily.push({
         date,
         pm25_mean: r1(pm25),
@@ -107,6 +109,7 @@ export function demoForecast(now = new Date()): AqForecast {
     generated_at: start.toISOString(),
     model: {
       name: 'demo',
+      kind: 'mock',
       trained_rows: 0,
       sensors: stations.length,
       holdout: '—',

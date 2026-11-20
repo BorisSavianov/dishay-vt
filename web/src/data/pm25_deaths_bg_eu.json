@@ -1,0 +1,156 @@
+{
+ "meta": {
+  "source": "Eurostat sdg_11_52, premature deaths due to exposure to fine particulate matter (PM2.5), per 100,000 people",
+  "as_of": "2025-12-09",
+  "license": "Eurostat reuse policy: reuse with source acknowledged",
+  "generated_at": "2026-11-20T09:02:57+00:00"
+ },
+ "bg": [
+  {
+   "year": 2005,
+   "value": 239
+  },
+  {
+   "year": 2007,
+   "value": 213
+  },
+  {
+   "year": 2008,
+   "value": 233
+  },
+  {
+   "year": 2009,
+   "value": 204
+  },
+  {
+   "year": 2010,
+   "value": 199
+  },
+  {
+   "year": 2011,
+   "value": 249
+  },
+  {
+   "year": 2012,
+   "value": 204
+  },
+  {
+   "year": 2013,
+   "value": 177
+  },
+  {
+   "year": 2014,
+   "value": 185
+  },
+  {
+   "year": 2015,
+   "value": 197
+  },
+  {
+   "year": 2016,
+   "value": 179
+  },
+  {
+   "year": 2017,
+   "value": 181
+  },
+  {
+   "year": 2018,
+   "value": 170
+  },
+  {
+   "year": 2019,
+   "value": 142
+  },
+  {
+   "year": 2020,
+   "value": 153
+  },
+  {
+   "year": 2021,
+   "value": 159
+  },
+  {
+   "year": 2022,
+   "value": 128
+  },
+  {
+   "year": 2023,
+   "value": 104
+  }
+ ],
+ "eu": [
+  {
+   "year": 2005,
+   "value": 97
+  },
+  {
+   "year": 2007,
+   "value": 78
+  },
+  {
+   "year": 2008,
+   "value": 79
+  },
+  {
+   "year": 2009,
+   "value": 81
+  },
+  {
+   "year": 2010,
+   "value": 82
+  },
+  {
+   "year": 2011,
+   "value": 87
+  },
+  {
+   "year": 2012,
+   "value": 76
+  },
+  {
+   "year": 2013,
+   "value": 73
+  },
+  {
+   "year": 2014,
+   "value": 64
+  },
+  {
+   "year": 2015,
+   "value": 71
+  },
+  {
+   "year": 2016,
+   "value": 62
+  },
+  {
+   "year": 2017,
+   "value": 67
+  },
+  {
+   "year": 2018,
+   "value": 64
+  },
+  {
+   "year": 2019,
+   "value": 51
+  },
+  {
+   "year": 2020,
+   "value": 52
+  },
+  {
+   "year": 2021,
+   "value": 56
+  },
+  {
+   "year": 2022,
+   "value": 53
+  },
+  {
+   "year": 2023,
+   "value": 41
+  }
+ ]
+}

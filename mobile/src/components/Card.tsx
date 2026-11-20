@@ -1,19 +1,37 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useColors } from '../lib/color-mode';
+import { Glass } from './Glass';
 import { Icon, type IconName } from './Icon';
 
 export function Card({ children, soft = false, style }: { children: ReactNode; soft?: boolean; style?: StyleProp<ViewStyle> }) {
   const c = useColors();
+  // Liquid Glass on iOS 26+; the solid card with its hairline border elsewhere.
   return (
-    <View
-      style={[
-        styles.card,
-        { backgroundColor: soft ? c.accentSoft : c.card, borderColor: soft ? 'transparent' : c.line },
-        style,
-      ]}
+    <Glass
+      fallback={soft ? c.accentSoft : c.card}
+      tint={soft ? c.accentSoft : undefined}
+      style={[styles.card, { borderColor: soft ? 'transparent' : c.line }, style]}
     >
       {children}
+    </Glass>
+  );
+}
+
+// Two columns on a wide window (unfolded iPhone Duo, iPad), one column on a phone.
+export function Columns({ columns, left, right }: { columns: number; left: ReactNode; right: ReactNode }) {
+  if (columns < 2) {
+    return (
+      <>
+        {left}
+        {right}
+      </>
+    );
+  }
+  return (
+    <View style={styles.cols}>
+      <View style={styles.col}>{left}</View>
+      <View style={styles.col}>{right}</View>
     </View>
   );
 }
@@ -80,7 +98,9 @@ export function Kpi({
 }
 
 const styles = StyleSheet.create({
-  card: { gap: 14, padding: 18, borderRadius: 22, borderWidth: 1 },
+  card: { gap: 14, padding: 18, borderRadius: 26, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  cols: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
+  col: { flex: 1, gap: 16, minWidth: 0 },
   title: { fontSize: 19, fontWeight: '700', letterSpacing: -0.2 },
   sub: { fontSize: 13 },
   note: { fontSize: 12.5, lineHeight: 18 },

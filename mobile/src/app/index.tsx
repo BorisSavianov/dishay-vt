@@ -6,12 +6,14 @@ import { testAlert } from '../aq/alerts';
 import { bestWindow, clampLevel, LEVEL_COLORS, levelNow, levelTextColor, localDate, type Level } from '../aq/levels';
 import { useAir } from '../aq/store';
 import { advice, air, levelName, profileName } from '../aq/strings';
-import { Card, CardTitle, Note } from '../components/Card';
+import { Card, CardTitle, Columns, Note } from '../components/Card';
+import { ExplainCard } from '../components/ExplainCard';
 import { ForecastChart } from '../components/ForecastChart';
 import { Icon } from '../components/Icon';
 import { Screen } from '../components/Screen';
 import { useColors } from '../lib/color-mode';
 import { useLang } from '../lib/lang';
+import { useLayout } from '../lib/layout';
 import type { Lang } from '../shared/types';
 
 function hhmm(iso: string): string {
@@ -33,6 +35,7 @@ export default function AirScreen() {
   const c = useColors();
   const { forecast, source, loading, home, prefs, refresh, alerts, enableAlerts } = useAir();
   const now = new Date();
+  const { columns } = useLayout();
 
   // First launch: pick a profile and station.
   useEffect(() => {
@@ -53,7 +56,7 @@ export default function AirScreen() {
   const level: Level | null = current?.level ?? null;
 
   return (
-    <Screen title={air(lang, 'air.title')} lead={air(lang, 'air.lead')}>
+    <Screen title={air(lang, 'air.title')} lead={air(lang, 'air.lead')} accent={level ? LEVEL_COLORS[level] : undefined}>
       {source === 'demo' ? (
         <Pressable
           onPress={refresh}
@@ -67,35 +70,39 @@ export default function AirScreen() {
         <Text style={[styles.live, { color: c.muted }]}>{air(lang, 'air.live', { time: hhmm(forecast.generated_at) })}</Text>
       )}
 
-      {/* The headline card: level colour, number, advice for this profile. */}
-      <View
-        style={[styles.hero, { backgroundColor: level ? LEVEL_COLORS[level] : c.card2 }]}
-        accessible
-        accessibilityLabel={
-          level && current
-            ? `${home.name}: ${levelName(lang, level)}, PM2.5 ${Math.round(current.pm25)}. ${advice(lang, prefs.profile, level)}`
-            : home.name
-        }
-      >
-        <Pressable onPress={() => router.navigate('/profile')} style={styles.heroTop} accessibilityRole="button">
-          <Text style={[styles.heroPlace, { color: level ? levelTextColor(level) : c.fg }]} numberOfLines={1}>
-            {home.name}
-          </Text>
-          <Text style={[styles.heroChange, { color: level ? levelTextColor(level) : c.fg }]}>
-            {profileName(lang, prefs.profile)} · {air(lang, 'air.change')}
-          </Text>
-        </Pressable>
-        {level && current ? (
+      <Columns
+        columns={columns}
+        left={
           <>
-            <Text style={[styles.heroLevel, { color: levelTextColor(level) }]}>{levelName(lang, level)}</Text>
-            <View style={styles.heroNums}>
-              <Text style={[styles.heroNum, { color: levelTextColor(level) }]}>{Math.round(current.pm25)}</Text>
-              <Text style={[styles.heroUnit, { color: levelTextColor(level) }]}>
-                µg/m³ PM2.5{'\n'}
-                {air(lang, current.measured ? 'air.now.measured' : 'air.now.forecast')}
-              </Text>
-            </View>
-            <Text style={[styles.heroAdvice, { color: levelTextColor(level) }]}>{advice(lang, prefs.profile, level)}</Text>
+            {/* The headline card: level colour, number, advice for this profile. */}
+            <View
+              style={[styles.hero, { backgroundColor: level ? LEVEL_COLORS[level] : c.card2 }]}
+              accessible
+              accessibilityLabel={
+                level && current
+                  ? `${home.name}: ${levelName(lang, level)}, PM2.5 ${Math.round(current.pm25)}. ${advice(lang, prefs.profile, level)}`
+                  : home.name
+              }
+            >
+              <Pressable onPress={() => router.navigate('/profile')} style={styles.heroTop} accessibilityRole="button">
+                <Text style={[styles.heroPlace, { color: level ? levelTextColor(level) : c.fg }]} numberOfLines={1}>
+                  {home.name}
+                </Text>
+                <Text style={[styles.heroChange, { color: level ? levelTextColor(level) : c.fg }]}>
+                  {profileName(lang, prefs.profile)} · {air(lang, 'air.change')}
+                </Text>
+              </Pressable>
+              {level && current ? (
+                <>
+                  <Text style={[styles.heroLevel, { color: levelTextColor(level) }]}>{levelName(lang, level)}</Text>
+                  <View style={styles.heroNums}>
+                    <Text style={[styles.heroNum, { color: levelTextColor(level) }]}>{Math.round(current.pm25)}</Text>
+                    <Text style={[styles.heroUnit, { color: levelTextColor(level) }]}>
+                      µg/m³ PM2.5{'\n'}
+                      {air(lang, current.measured ? 'air.now.measured' : 'air.now.forecast')}
+                    </Text>
+                  </View>
+                  <Text style={[styles.heroAdvice, { color: levelTextColor(level) }]}>{advice(lang, prefs.profile, level)}</Text>
           </>
         ) : null}
       </View>
@@ -107,47 +114,6 @@ export default function AirScreen() {
             ? air(lang, 'air.best.body', { start: hhmm(best.start), end: hhmm(best.end), pm: Math.round(best.pm25) })
             : air(lang, 'air.best.none')}
         </Text>
-      </Card>
-
-      {home.hourly?.length ? (
-        <Card>
-          <CardTitle title={air(lang, 'air.chart.title')} sub={air(lang, 'air.chart.sub')} />
-          <ForecastChart
-            hourly={home.hourly}
-            lang={lang}
-            labels={{ ours: air(lang, 'air.chart.ours'), cams: air(lang, 'air.chart.cams') }}
-          />
-        </Card>
-      ) : null}
-
-      <Card>
-        <CardTitle title={air(lang, 'air.days.title')} />
-        <View style={{ gap: 10 }}>
-          {home.daily.map((d) => {
-            const lv = clampLevel(d.level);
-            return (
-              <View key={d.date} style={[styles.day, { borderColor: c.line, backgroundColor: c.card2 }]}>
-                <View style={styles.dayHead}>
-                  <View style={[styles.dayBadge, { backgroundColor: LEVEL_COLORS[lv] }]}>
-                    <Text style={[styles.dayBadgeText, { color: levelTextColor(lv) }]}>{levelName(lang, lv)}</Text>
-                  </View>
-                  <Text style={[styles.dayName, { color: c.fg }]}>{dayLabel(lang, d.date, now)}</Text>
-                  <Text style={[styles.dayPm, { color: c.muted }]}>PM10 {Math.round(d.pm10_mean)}</Text>
-                </View>
-                {d.exceeds_eu_limit ? <Text style={[styles.eu, { color: c.neg }]}>⚠ {air(lang, 'air.eu')}</Text> : null}
-                {d.reasons.length ? (
-                  <Text style={[styles.why, { color: c.muted }]}>
-                    {air(lang, 'air.days.why')}:{' '}
-                    {d.reasons
-                      .slice(0, 3)
-                      .map((r) => (lang === 'en' && r.label_en ? r.label_en : r.label_bg))
-                      .join(' · ')}
-                  </Text>
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
       </Card>
 
       <Card>
@@ -178,6 +144,57 @@ export default function AirScreen() {
           <Text style={[styles.linkText, { color: c.accent }]}>{air(lang, 'air.profile.edit')} →</Text>
         </Pressable>
       </Card>
+
+          </>
+        }
+        right={
+          <>
+            {home.hourly?.length ? (
+              <Card>
+                <CardTitle title={air(lang, 'air.chart.title')} sub={air(lang, 'air.chart.sub')} />
+                <ForecastChart
+                  hourly={home.hourly}
+                  lang={lang}
+                  labels={{ ours: air(lang, 'air.chart.ours'), cams: air(lang, 'air.chart.cams') }}
+                />
+              </Card>
+            ) : null}
+
+            <Card>
+              <CardTitle title={air(lang, 'air.days.title')} />
+              <View style={{ gap: 10 }}>
+                {home.daily.map((d) => {
+                  const lv = clampLevel(d.level);
+                  return (
+                    <View key={d.date} style={[styles.day, { borderColor: c.line, backgroundColor: c.card2 }]}>
+                      <View style={styles.dayHead}>
+                        <View style={[styles.dayBadge, { backgroundColor: LEVEL_COLORS[lv] }]}>
+                          <Text style={[styles.dayBadgeText, { color: levelTextColor(lv) }]}>{levelName(lang, lv)}</Text>
+                        </View>
+                        <Text style={[styles.dayName, { color: c.fg }]}>{dayLabel(lang, d.date, now)}</Text>
+                        <Text style={[styles.dayPm, { color: c.muted }]}>PM10 {Math.round(d.pm10_mean)}</Text>
+                      </View>
+                      {d.exceeds_eu_limit ? <Text style={[styles.eu, { color: c.neg }]}>⚠ {air(lang, 'air.eu')}</Text> : null}
+                      {d.reasons.length ? (
+                        <Text style={[styles.why, { color: c.muted }]}>
+                          {air(lang, 'air.days.why')}:{' '}
+                          {d.reasons
+                            .slice(0, 3)
+                            .map((r) => (lang === 'en' && r.label_en ? r.label_en : r.label_bg))
+                            .join(' · ')}
+                        </Text>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            </Card>
+
+            {/* The server explains its own forecast, so the card would contradict the demo numbers. */}
+            {source === 'live' ? <ExplainCard station={home.id} profile={prefs.profile} lang={lang} /> : null}
+          </>
+        }
+      />
 
       <Note>{air(lang, 'air.source')}</Note>
     </Screen>

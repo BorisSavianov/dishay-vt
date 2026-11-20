@@ -2,6 +2,8 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // The forecast fallback and the episode replay are read from disk at request time, so ship it with every server function.
+  outputFileTracingIncludes: { '/**': ['./src/data/aq_forecast.json', './src/data/aq_episode.json'] },
   async headers() {
     return [
       {

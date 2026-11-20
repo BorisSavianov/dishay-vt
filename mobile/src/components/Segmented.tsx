@@ -7,15 +7,18 @@ export function Segmented<T extends string>({
   value,
   onChange,
   label,
+  bare = false,
 }: {
   options: { key: T; label: string }[];
   value: T;
   onChange: (key: T) => void;
   label: string;
+  // No background or border: for a segmented control sitting on glass.
+  bare?: boolean;
 }) {
   const c = useColors();
   return (
-    <View style={[styles.row, { backgroundColor: c.card2, borderColor: c.line }]} accessibilityRole="radiogroup" accessibilityLabel={label}>
+    <View style={[styles.row, bare ? styles.bare : { backgroundColor: c.card2, borderColor: c.line }]} accessibilityRole="radiogroup" accessibilityLabel={label}>
       {options.map((o) => {
         const on = o.key === value;
         return (
@@ -36,6 +39,7 @@ export function Segmented<T extends string>({
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignSelf: 'flex-start', padding: 3, borderRadius: 12, borderWidth: 1 },
+  bare: { borderWidth: 0, backgroundColor: 'transparent' },
   item: { minHeight: 36, minWidth: 54, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
   text: { fontSize: 13, fontWeight: '700' },
 });

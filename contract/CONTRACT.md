@@ -194,3 +194,11 @@ Written by `python -m ml.aq_episode` (bundled, static). A real smog day in Velik
              "worst10": { "model_warned": 6, "cams_warned": 10 } }
 }
 ```
+
+### Web implementation of the two routes
+
+- Both return bare JSON (no `ok` wrapper) plus `source`: `"database"` (Neon), `"bundled"` (`web/src/data/aq_forecast.json`) or `"demo"`. `"demo"` means invented numbers: either `model.kind` is `"mock"`, or neither Neon nor the file has a forecast and the web built one with the same generator as `mobile/src/aq/mock.ts`. A client must label `"demo"` as demo data. The same value is in the `X-Data-Source` header.
+- Unknown station: `404 { "ok": false, "error": { "code": "not_found", "message" } }`.
+- Headers: `Access-Control-Allow-Origin: *`; `Cache-Control: public, s-maxage=300, stale-while-revalidate=600` (errors: `no-store`).
+- Web copies of the types and levels: `web/src/lib/aq/` (`types.ts`, `levels.ts`, `mock.ts`, `strings.ts`). Change band edges in every copy at once.
+- `GET /api/health` also returns `aq: { source, generated_at, model, stations }`.

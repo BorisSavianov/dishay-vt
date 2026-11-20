@@ -1,5 +1,5 @@
 import type { ColorValue } from 'react-native';
-import Svg, { Path, Rect } from 'react-native-svg';
+import Svg, { Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 // The same line icons as the web app (web/src/components/shell/Icon.tsx).
 const PATHS = {
@@ -33,12 +33,23 @@ export function Icon({ name, color, size = 22 }: { name: IconName; color: ColorV
   );
 }
 
+// Дишай ВТ: wind gusts on the brand indigo, the lowest in the "Добър" (EAQI 1) green.
+// Same drawing as assets/brand/mark.svg, which the app icons are rendered from (scripts/make-icons.mjs).
 export function BrandMark({ size = 28 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 32 32" accessibilityElementsHidden importantForAccessibility="no">
-      <Rect x={3} y={17} width={6} height={12} rx={2} fill="#7c75ff" />
-      <Rect x={13} y={10} width={6} height={19} rx={2} fill="#5b52f0" />
-      <Rect x={23} y={3} width={6} height={26} rx={2} fill="#a9a4ff" />
+      <Defs>
+        <LinearGradient id="brandTile" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor="#6c64ff" />
+          <Stop offset="1" stopColor="#4338ca" />
+        </LinearGradient>
+      </Defs>
+      <Rect width={32} height={32} rx={9} fill="url(#brandTile)" />
+      <G transform="translate(4.5 4.3) scale(0.96)" fill="none" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M9.59 4.59A2 2 0 1 1 11 8H2" stroke="#ffffff" />
+        <Path d="M17.73 7.73A2.5 2.5 0 1 1 19.5 12H2" stroke="#ffffff" />
+        <Path d="M12.59 19.41A2 2 0 1 0 14 16H2" stroke="#50c4a8" />
+      </G>
     </Svg>
   );
 }
