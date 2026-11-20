@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { POST } from '@/app/api/aq/explain/route';
 import { isGrounded } from '../facts';
 import { createMemoryStore } from '../store';
@@ -62,11 +62,23 @@ describe('forecast explanation', () => {
     expect(out.text).toBe(facts.join(' '));
   });
 
-  it('answers 400 for a bad profile and text for a good one', async () => {
-    expect((await post({ profile: 'cat', lang: 'en' })).status).toBe(400);
-    const res = await post({ profile: 'asthma', lang: 'bg' });
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { text: string; provider: string };
-    expect(body.text.length).toBeGreaterThan(20);
+  it('answers 400 for a bad profile and text for a good one, without the network', async () => {
+    // The route reads process.env, and a machine with a real key would call the provider. No key and no
+    // network: MOCK_LLM forces the text built from the facts, and a fetch that fails the test backs it up.
+    vi.stubEnv('MOCK_LLM', '1');
+    const fetchSpy = vi.fn(() => Promise.reject(new Error('the suite must not use the network')));
+    vi.stubGlobal('fetch', fetchSpy);
+    try {
+      expect((await post({ profile: 'cat', lang: 'en' })).status).toBe(400);
+      const res = await post({ profile: 'asthma', lang: 'bg' });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { text: string; provider: string };
+      expect(body.text.length).toBeGreaterThan(20);
+      expect(body.provider).toBe('mock');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
   });
 });

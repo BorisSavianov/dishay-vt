@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { day } from '@/lib/tg/fixtures';
-import { showSources, sourcesLine } from './sources';
+import { dmy, showSources, sourceSegments, sourcesLine, whatIfLine } from './sources';
+import type { AqWhatIf } from './types';
 
 const sources = { heating: 0.64, traffic: 0.08, regional: 0.15, other: 0.13 };
 
@@ -12,5 +13,33 @@ describe('sources estimate', () => {
     expect(showSources({ ...day('2026-11-21', 1), pm25_mean: 4.9, sources })).toBe(false);
     expect(showSources({ ...day('2026-11-21', 1), pm25_mean: 5, sources })).toBe(true);
     expect(showSources({ ...day('2026-11-21', 1), pm25_mean: 30 })).toBe(false);
+  });
+});
+
+const lastWinter = { from: '2025-10-01', to: '2026-03-31', bad_days: 23, bad_days_after: 15, days: 182 };
+const whatIf: AqWhatIf = { method: 'estimate', switch_share: 0.2, date: '2026-11-21', evening_drop_pm25: 3.1, last_winter: lastWinter };
+
+describe('what-if line', () => {
+  it('gives the evening drop and the last-winter days', () => {
+    expect(whatIfLine(whatIf, 'bg')).toBe(
+      'Ако 20% от домовете на дърва сменят отоплението: −3,1 µg/m³ вечерта на 21.11; 15 вместо 23 лоши дни миналата зима (оценка).',
+    );
+  });
+  it('drops the evening clause on a clean evening, so there is never a „−0“', () => {
+    expect(whatIfLine({ ...whatIf, evening_drop_pm25: 0 }, 'bg')).toBe(
+      'Ако 20% от домовете на дърва сменят отоплението: 15 вместо 23 лоши дни миналата зима (оценка).',
+    );
+    expect(whatIfLine({ ...whatIf, evening_drop_pm25: 0.4 }, 'en')).not.toMatch(/−0/);
+  });
+  it('is null when a clean evening has no last-winter figures either', () => {
+    expect(whatIfLine({ ...whatIf, evening_drop_pm25: 0, last_winter: undefined }, 'bg')).toBeNull();
+  });
+});
+
+describe('source segments', () => {
+  it('lists the four shares in order and formats dates', () => {
+    expect(sourceSegments(sources, 'bg').map((x) => x.key)).toEqual(['heating', 'traffic', 'regional', 'other']);
+    expect(sourceSegments(sources, 'bg')[3]!.label).toBe('друго');
+    expect(dmy('2025-10-01')).toBe('01.10.2025');
   });
 });
