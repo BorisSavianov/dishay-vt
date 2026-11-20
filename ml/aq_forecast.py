@@ -274,6 +274,9 @@ def run_once(write_db: bool = True) -> dict:
     generated = now.tz_convert(TZ).replace(microsecond=0).isoformat()
     model_block = {k: meta[k] for k in ("name", "kind", "trained_rows", "sensors", "holdout", "mae", "exceedance_f1",
                                         "mae_vt", "mae_by_horizon", "importance") if k in meta}
+    ep = episode_block()
+    if ep:
+        model_block["episode"] = ep
     payload = {"generated_at": generated, "model": model_block, "stations": stations}
     errors = validate(payload)
     if errors:
@@ -290,6 +293,23 @@ def run_once(write_db: bool = True) -> dict:
         f"VT {vt['name']} days {[(x['date'], x['pm10_mean'], x['level']) for x in vt['daily']]} "
         f"in {time.monotonic() - t0:.0f}s")
     return payload
+
+
+def episode_block() -> dict | None:
+    """model.episode for the „Защо?“ page (Velko's shape), from ml.aq_episode's replay: the forecast issued the
+    day before a real VT smog day, by a model that never saw that winter."""
+    path = ROOT / "web" / "src" / "data" / "aq_episode.json"
+    if not path.exists():
+        return None
+    ep = json.loads(path.read_text(encoding="utf-8"))
+    day_before = next((f for f in ep["forecasts"] if f["days_before"] == 1), None)
+    if not day_before:
+        return None
+    pts = lambda rows: [{"t": r["t"], "pm10": r["pm10"], "pm25": r["pm25"]} for r in rows if r["pm10"] is not None]
+    return {"station_id": "vt-city", "place": ep["place"], "place_en": ep["place_en"], "date": ep["date"],
+            "issued_at": day_before["issued"], "observed": pts(ep["observed"]), "predicted": pts(day_before["hourly"]),
+            "cams": pts(ep["cams"]), "observed_daily": ep["observed_daily"], "predicted_daily": day_before["daily"],
+            "cams_daily": ep["cams_daily"], "score": ep.get("score")}
 
 
 # ---------------- Neon ----------------

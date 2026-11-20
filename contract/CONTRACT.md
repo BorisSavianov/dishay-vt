@@ -156,6 +156,20 @@ Each run replaces all rows in one transaction (stations missing from the run are
 
 One `AqStation` with `hourly` (72 items). `404` for an unknown id.
 
+### `model.episode` (in every forecast, for the „Защо?“ page)
+
+The day-before forecast of the replayed smog day, in the shape `web/src/lib/aq/types.ts` expects, plus additive fields:
+
+```jsonc
+"episode": { "station_id": "vt-city", "place": "Велико Търново", "place_en": "Veliko Tarnovo",
+             "date": "2025-12-18", "issued_at": "2025-12-17T12:00:00+02:00",
+             "observed":  [ { "t": "...", "pm10": 70.1, "pm25": 31.2 } ],   // 24 hourly, VT city mean
+             "predicted": [ { "t": "...", "pm10": 41.2, "pm25": 19.3 } ],
+             "cams":      [ { "t": "...", "pm10": 25.3, "pm25": 19.0 } ],
+             "observed_daily": {...}, "predicted_daily": { ..., "alert_level": 3 }, "cams_daily": {...},
+             "score": {...} }                                                 // as in aq_episode.json
+```
+
 ### Episode replay: `web/src/data/aq_episode.json`
 
 Written by `python -m ml.aq_episode` (bundled, static). A real smog day in Veliko Tarnovo from the winter 2025/26 holdout, replayed with the models trained *before* that winter, so it is an honest forecast. For the „Защо?“ page and slide 6.
@@ -172,7 +186,8 @@ Written by `python -m ml.aq_episode` (bundled, static). A real smog day in Velik
                    "daily": { "pm10_mean": 43.2, "pm25_mean": 23.1, "level": 3, "exceeds_eu_limit": false } },
                  { "days_before": 1, ... } ],
   "score": { "days": 178, "bad_days": 23,                                             // day-before warnings, level >= 3
-             "model": { "hits": 9, "misses": 14, "false_alarms": 4, "pod": 0.39, "far": 0.31 },
+             "model_alert": { "hits": 18, "misses": 5, "false_alarms": 14, "pod": 0.78, "far": 0.44 },  // alert_level
+             "model_level": { "hits": 9, "misses": 14, "false_alarms": 4, "pod": 0.39, "far": 0.31 },
              "cams":  { "hits": 20, "misses": 3, "false_alarms": 23, "pod": 0.87, "far": 0.53 },
              "worst10": { "model_warned": 6, "cams_warned": 10 } }
 }

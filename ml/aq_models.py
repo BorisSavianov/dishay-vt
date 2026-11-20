@@ -10,13 +10,18 @@ import pandas as pd
 from ml.aq_features import CATEGORICAL
 
 
+def xgb_frame(X: pd.DataFrame) -> pd.DataFrame:
+    """XGBoost 3 refuses categories unseen in training; the sensor type goes in as a plain number instead."""
+    return X.assign(**{c: X[c].astype("float32") for c in CATEGORICAL if c in X})
+
+
 class Model:
     def __init__(self, algo: str, booster, best_iteration: int | None = None):
         self.algo, self.booster, self.best_iteration = algo, booster, best_iteration
 
     def _dm(self, X: pd.DataFrame):
         import xgboost as xgb
-        return xgb.DMatrix(X, enable_categorical=True)
+        return xgb.DMatrix(xgb_frame(X))
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         if self.algo == "lgbm":
@@ -69,8 +74,8 @@ def fit_xgb(kind: str, X, y, Xv, yv, lr=0.05, depth=8, rounds=3000, stop=100) ->
     import xgboost as xgb
     params = {**XGB_OBJECTIVE[kind], "device": "cuda", "tree_method": "hist", "learning_rate": lr, "max_depth": depth,
               "min_child_weight": 50, "subsample": 0.8, "colsample_bytree": 0.8, "lambda": 5.0, "max_bin": 256}
-    dtr = xgb.DMatrix(X, y, enable_categorical=True)
-    dv = xgb.DMatrix(Xv, yv, enable_categorical=True)
+    dtr = xgb.DMatrix(xgb_frame(X), y)
+    dv = xgb.DMatrix(xgb_frame(Xv), yv)
     b = xgb.train(params, dtr, num_boost_round=rounds, evals=[(dv, "val")], early_stopping_rounds=stop,
                   verbose_eval=False)
     best = int(b.best_iteration) + 1
@@ -81,4 +86,4 @@ def refit_xgb(kind: str, X, y, rounds: int, lr=0.05, depth=8) -> Model:
     import xgboost as xgb
     params = {**XGB_OBJECTIVE[kind], "device": "cuda", "tree_method": "hist", "learning_rate": lr, "max_depth": depth,
               "min_child_weight": 50, "subsample": 0.8, "colsample_bytree": 0.8, "lambda": 5.0, "max_bin": 256}
-    return Model("xgb", xgb.train(params, xgb.DMatrix(X, y, enable_categorical=True), num_boost_round=rounds), rounds)
+    return Model("xgb", xgb.train(params, xgb.DMatrix(xgb_frame(X), y), num_boost_round=rounds), rounds)
