@@ -25,3 +25,5 @@ ml/reports/
 ml/models/
 ml/models_exp/
 ml/models_v1/
+data/forecast_log/
+data/processed/scoreboard_replay.json
