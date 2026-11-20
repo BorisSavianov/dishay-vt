@@ -291,6 +291,7 @@ def run_once(write_db: bool = True) -> dict:
     OUT.write_text(json.dumps(slim, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     if write_db:
         upsert(payload)
+        notify_telegram()
     vt = next((s for s in stations if s["id"] == "sc-35767"), stations[0])
     log(f"forecast {generated}: {len(stations)} stations, {OUT.stat().st_size / 1e6:.1f} MB, "
         f"VT {vt['name']} days {[(x['date'], x['pm10_mean'], x['level']) for x in vt['daily']]} "
@@ -317,13 +318,31 @@ def episode_block() -> dict | None:
 
 # ---------------- Neon ----------------
 
-def database_url() -> str | None:
+def env_value(key: str) -> str | None:
+    """A value from web/.env.local (the same file the web app reads), or None."""
     env = ROOT / "web" / ".env.local"
     if env.exists():
         for line in env.read_text(encoding="utf-8").splitlines():
-            if line.startswith("DATABASE_URL="):
-                return line.split("=", 1)[1].strip()
+            if line.startswith(f"{key}="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'") or None
     return None
+
+
+def database_url() -> str | None:
+    return env_value("DATABASE_URL")
+
+
+def notify_telegram(post=httpx.post) -> None:
+    """Asks the web app to send the Telegram alerts that are now due. Never breaks the forecast loop."""
+    url, secret = env_value("TG_NOTIFY_URL"), env_value("TELEGRAM_NOTIFY_SECRET")
+    if not url or not secret:
+        log("no TG_NOTIFY_URL / TELEGRAM_NOTIFY_SECRET in web/.env.local: skipped Telegram alerts")
+        return
+    try:
+        res = post(url, headers={"Authorization": f"Bearer {secret}"}, timeout=10)
+        log(f"Telegram notify: {res.text[:200]}")
+    except Exception as e:  # noqa: BLE001 - a failed call must not stop the hourly forecast
+        log(f"Telegram notify failed: {e!r}")
 
 
 DDL = """create table if not exists aq_forecast (
