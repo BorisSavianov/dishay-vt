@@ -29,3 +29,9 @@ Checked on 2026-11-15 during the recon. Endpoints and quirks come from the recon
 | EEA European Air Quality Index bands | airindex.eea.europa.eu/AQI/index.html (2024 revision, WHO 2021 based) | EEA, reuse with acknowledgement | PM2.5 5/15/50/90/140, PM10 15/45/120/195/270 µg/m³. Defined on hourly values; `daily[].level` applies them to daily means. |
 
 Humidity correction: SDS011-type optical sensors over-read in humid air. Above 80% RH we divide by the κ-Köhler growth factor (Crilley et al. 2018, κ = 0.4) relative to 80% RH, with RH capped at 95%. Below 80% the reading is used as is.
+
+## Landing story (3D terrain), checked 2026-11-20
+
+| Source | Endpoint or file | Licence | Notes and quirks |
+|---|---|---|---|
+| AWS Terrain Tiles (Mapzen) | `s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`, z13 | Mixed open sources (SRTM, EU-DEM and others; attribution required) | Baked once by `web/scripts/bake-terrain.ts` into `web/public/story/terrain.png` (8-bit grayscale, 1024², a 15 km square centred on 43.078 N, 25.635 E, 83–467 m) and `terrain.json`. The page never fetches tiles. Attribution shown in the story footer. |
