@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { clampLevel, LEVEL_COLORS, levelNow, levelTextColor, localDate, type Level } from '../aq/levels';
+import { clampLevel, levelNow, localDate, type Level } from '../aq/levels';
 import { useAir } from '../aq/store';
-import { advice, air, levelName, profileName } from '../aq/strings';
+import { advice, air, profileName } from '../aq/strings';
 import { Card, CardTitle, Columns, Note } from '../components/Card';
 import { Icon } from '../components/Icon';
+import { LevelChip } from '../components/LevelChip';
 import { Screen } from '../components/Screen';
 import { SourceLine } from '../components/SourceLine';
 import { useColors } from '../lib/color-mode';
@@ -67,12 +68,10 @@ export default function Health() {
       <CardTitle title={air(lang, 'health.plan.title')} sub={profileName(lang, prefs.profile)} />
       {days.map(({ label, level }) =>
         level ? (
-          <View key={label} style={[styles.planRow, { backgroundColor: c.card2, borderColor: c.line }]}>
+          <View key={label} style={[styles.planRow, { borderColor: c.line }]}>
             <View style={styles.planHead}>
               <Text style={[styles.planDay, { color: c.fg }]}>{label}</Text>
-              <View style={[styles.badge, { backgroundColor: LEVEL_COLORS[level] }]}>
-                <Text style={[styles.badgeText, { color: levelTextColor(level) }]}>{levelName(lang, level)}</Text>
-              </View>
+              <LevelChip level={level} lang={lang} />
             </View>
             <Text style={[styles.planText, { color: c.fg }]}>{advice(lang, prefs.profile, level)}</Text>
           </View>
@@ -98,7 +97,7 @@ export default function Health() {
           onPress={() => openInMaps(p)}
           accessibilityRole="link"
           accessibilityHint={air(lang, 'health.near.open')}
-          style={({ pressed }) => [styles.place, { backgroundColor: c.card2, borderColor: c.line }, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.place, { borderColor: c.line }, pressed && { opacity: 0.7 }]}
         >
           <View style={[styles.dot, { backgroundColor: c.points[p.type as keyof typeof c.points] ?? c.muted }]} />
           <View style={{ flex: 1 }}>
@@ -130,7 +129,7 @@ export default function Health() {
   );
 
   return (
-    <Screen title={air(lang, 'health.title')} lead={air(lang, 'health.lead')}>
+    <Screen tab="health" title={air(lang, 'health.title')} lead={air(lang, 'health.lead')}>
       <Columns
         columns={columns}
         left={
@@ -150,9 +149,7 @@ const styles = StyleSheet.create({
   planHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   planDay: { fontSize: 16, fontWeight: '700' },
   planText: { fontSize: 15, lineHeight: 21 },
-  badge: { borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
-  badgeText: { fontSize: 12.5, fontWeight: '800' },
-  listTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 1.2 },
+  listTitle: { fontSize: 12, fontWeight: '600', letterSpacing: 2.2 },
   place: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingHorizontal: 12, borderRadius: 14, borderWidth: StyleSheet.hairlineWidth },
   dot: { width: 10, height: 10, borderRadius: 5 },
   placeName: { fontSize: 15, fontWeight: '600' },

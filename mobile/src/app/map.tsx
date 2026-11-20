@@ -62,7 +62,7 @@ export default function MapScreen() {
   );
 
   return (
-    <Screen title={air(lang, 'tab.map')}>
+    <Screen tab="map" title={air(lang, 'tab.map')}>
       <Columns columns={columns} left={airCard} right={healthCard} />
     </Screen>
   );

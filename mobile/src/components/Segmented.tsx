@@ -18,7 +18,7 @@ export function Segmented<T extends string>({
 }) {
   const c = useColors();
   return (
-    <View style={[styles.row, bare ? styles.bare : { backgroundColor: c.card2, borderColor: c.line }]} accessibilityRole="radiogroup" accessibilityLabel={label}>
+    <View style={[styles.row, bare ? styles.bare : { backgroundColor: c.glass, borderColor: c.line }]} accessibilityRole="radiogroup" accessibilityLabel={label}>
       {options.map((o) => {
         const on = o.key === value;
         return (
