@@ -10,8 +10,9 @@ import { ExportMenu } from './ExportMenu';
 import { BrandMark, Icon, type IconName } from './Icon';
 import { DocLang, LangSwitch } from './LangSwitch';
 import { ThemeToggle } from './ThemeToggle';
+import type { NavId } from '@/lib/look';
 
-export type NavId = 'story' | 'dashboard' | 'geo' | 'why' | 'health' | 'ai' | 'predict' | 'sources' | 'about';
+export type { NavId };
 
 type NavItem = { id: NavId; href: string; label: MessageKey; tab?: MessageKey; icon: IconName };
 
