@@ -4,7 +4,8 @@ import type { Lang } from '@/lib/types';
 export const STORY_BG = {
   'ch1.kicker': 'Велико Търново. Зима.',
   'ch1.title': 'Дишай ВТ',
-  'ch1.lead': 'Знаем кога въздухът ще е мръсен. Ден по-рано.',
+  // U+2011 (non-breaking hyphen): „по-рано“ must not split across lines.
+  'ch1.lead': 'Знаем кога въздухът ще е мръсен. Ден по\u2011рано.',
   'ch1.cue': 'Превърти надолу',
   'ch2.kicker': '18 декември 2025',
   'ch2.title': 'Градът изчезва в смог',
