@@ -65,12 +65,12 @@ def main() -> None:
         blh = ("без прогноза за слоя на смесване" if season["blh"] == "none"
                else "слоят на смесване е измерен (ERA5)")
         fig.text(0.01, 0.015, f"* {season['from'][8:]}–{season['to'][8:]}.11.2026, с прогнозата за времето, каквато е била "
-                 f"тогава ({blh}).\n  Модели, обучени преди зима 2025/26: тези седмици не са виждани. CAMS (вход и "
+                 f"тогава ({blh}).\n  Модели, обучени преди зима 2025/26: тези седмици не са виждани.\n  CAMS (вход и "
                  f"сравнение) е от архива – по-нов от момента на прогнозата, еднакво за двете колони.", fontsize=10, color=INK)
     ax.set_ylim(0, 1.15 * max(m[k] for _, m in groups for k in ("model", "persistence", "cams")))
     ax.legend(frameon=False, fontsize=12, ncol=3, loc="upper left")
     style(ax)
-    fig.tight_layout(rect=(0, 0.07 if season else 0, 1, 1))
+    fig.tight_layout(rect=(0, 0.1 if season else 0, 1, 1))
     fig.savefig(OUT / "mae_24h.png")
 
     # Error by horizon.
