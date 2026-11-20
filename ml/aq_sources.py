@@ -107,6 +107,36 @@ def day_shares(parts: dict[str, np.ndarray]) -> dict[str, float]:
     return {k: cents[k] / 100 for k in PARTS}
 
 
+def evening_drop(parts: dict, local: pd.DatetimeIndex, date: dt.date, share: float = SHARE) -> float:
+    """µg/m³ of PM2.5 removed on `date` 18:00–23:59 if `share` of the heating smoke went away."""
+    m = (np.asarray(local.hour) >= 18) & (np.array(local.date) == date)
+    if not m.any():
+        return 0.0
+    return round(share * float(np.nanmean(np.asarray(parts["heating"], dtype=float)[m])), 1)
+
+
+def bad_days(vt25: np.ndarray, vt10: np.ndarray, local: pd.DatetimeIndex, heating: np.ndarray | None = None,
+             share: float = SHARE) -> int:
+    """Days at EAQI >= 3 (daily means, >= 18 observed hours). With `heating`, after removing `share` of it each hour
+    (PM10 scaled by the same hourly PM2.5 factor)."""
+    from ml.aq_levels import level_of
+
+    p25 = np.asarray(vt25, dtype=float)
+    p10 = np.asarray(vt10, dtype=float)
+    if heating is not None:
+        after = np.maximum(p25 - share * np.nan_to_num(np.asarray(heating, dtype=float)), 0.0)
+        with np.errstate(all="ignore"):
+            p10 = np.where(p25 > 0, p10 * after / p25, p10)
+        p25 = after
+    df = pd.DataFrame({"date": local.date, "p25": p25, "p10": p10})
+    n = 0
+    for _, g in df.groupby("date"):
+        ok = g["p25"].notna() & g["p10"].notna()
+        if ok.sum() >= 18 and level_of(float(g.loc[ok, "p25"].mean()), float(g.loc[ok, "p10"].mean())) >= 3:
+            n += 1
+    return n
+
+
 def _history():
     """The cleaned panel from the first winter to the end of the holdout, its VT/regional series and VT temperature."""
     from ml.aq_features import build_panel, load_hourly, load_sensors, weather_frames
@@ -129,8 +159,23 @@ def main_profiles() -> None:
     holidays = _bg_holidays(range(2023, 2027))
     pre = series.index < HOLDOUT[0]
     prof = build_profiles(series[pre], temp[pre], holidays)
+    # Last winter (the holdout): observed VT, split with the profiles, recount bad days after a 20% heating switch.
+    hold = (series.index >= HOLDOUT[0]) & (series.index <= HOLDOUT[1])
+    local = series.index[hold].tz_convert(TZ)
+    vt_cols = np.flatnonzero(km_from_vt(p.sensors["lat"], p.sensors["lon"]) <= VT_KM)
+    with np.errstate(all="ignore"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        vt10 = np.nanmean(p.pm10[:, vt_cols], axis=1).astype(float)[hold]
+    vt25 = series["vt"].to_numpy()[hold]
+    parts = split(vt25, series["regional"].to_numpy()[hold], local, prof, holidays)
+    counts = pd.Series(~np.isnan(vt25)).groupby(np.array(local.date)).sum()
+    last = {"bad_days": bad_days(vt25, vt10, local), "bad_days_after": bad_days(vt25, vt10, local, parts["heating"]),
+            "days": int((counts >= 18).sum())}
+    shares = day_shares(parts)
+    print(f"last winter: bad days {last['bad_days']} → {last['bad_days_after']} after a {SHARE:.0%} switch "
+          f"({last['days']} days); season shares {shares}")
     out = {"built_at": pd.Timestamp.now(tz=TZ).isoformat(timespec="seconds"), "share": SHARE,
-           "method": "estimate", "profiles": prof}
+           "method": "estimate", "profiles": prof, "last_winter": last, "last_winter_shares": shares}
     b, t = prof["baseline"], prof["traffic"]
     print(f"baseline 08:00 weekday {b['weekday'][8]} weekend {b['weekend'][8]} | 21:00 weekday {b['weekday'][21]} "
           f"weekend {b['weekend'][21]} | traffic peak {max(t)} at {t.index(max(t)):02d}:00")

@@ -118,3 +118,54 @@ def test_day_shares_weekday():
 def test_day_shares_sum_exactly_one():
     s = day_shares({"heating": flat(1.0), "traffic": flat(1.0), "other": flat(1.0), "regional": flat(0.0)})
     assert sum(s.values()) == 1.0 and set(s) == {"heating", "traffic", "other", "regional"}
+
+
+# ---------------- Task 3: what-if and contract ----------------
+
+import copy
+from zoneinfo import ZoneInfo
+
+from ml.aq_contract import validate
+from ml.aq_mock import build
+from ml.aq_sources import bad_days, evening_drop
+
+
+def test_evening_drop():
+    local = pd.date_range(pd.Timestamp("2026-11-21", tz=TZ), periods=48, freq="h")
+    heating = np.where((local.hour >= 18) & (local.date == dt.date(2026, 11, 21)), 10.0, 0.0)
+    assert evening_drop({"heating": heating}, local, dt.date(2026, 11, 21)) == 2.0
+    assert evening_drop({"heating": heating}, local, dt.date(2026, 11, 25)) == 0.0
+
+
+def test_bad_days_before_and_after_switch():
+    local = pd.date_range(pd.Timestamp("2026-01-10", tz=TZ), periods=72, freq="h")
+    pm25 = np.concatenate([flat(20), flat(16), np.where(np.arange(24) < 17, 20.0, np.nan)])
+    pm10 = pm25 * 1.6
+    heating = flat(10, 72)
+    assert bad_days(pm25, pm10, local) == 2          # day C has 17 hours: ignored
+    assert bad_days(pm25, pm10, local, heating) == 1  # day B: 16 → 14 µg/m³ PM2.5, level 3 → 2
+
+
+SOURCES = {"heating": 0.64, "traffic": 0.08, "regional": 0.15, "other": 0.13}
+WHAT_IF = {"method": "estimate", "switch_share": 0.2, "date": "2026-11-21", "evening_drop_pm25": 3.1,
+           "last_winter": {"bad_days": 15, "bad_days_after": 11, "days": 170}}
+
+
+def payload_with_sources(sources=SOURCES, what_if=WHAT_IF) -> dict:
+    p = build(dt.datetime(2026, 11, 20, 13, 0, tzinfo=ZoneInfo("Europe/Sofia")))
+    p["stations"][0]["daily"][0]["sources"] = copy.deepcopy(sources)
+    p["model"]["sources_what_if"] = copy.deepcopy(what_if)
+    return p
+
+
+def test_contract_accepts_sources():
+    assert validate(payload_with_sources()) == []
+
+
+def test_contract_rejects_sources_not_summing_to_one():
+    bad = dict(SOURCES, heating=0.54)
+    assert any(".sources" in e for e in validate(payload_with_sources(sources=bad)))
+
+
+def test_contract_rejects_measured_what_if():
+    assert any("sources_what_if.method" in e for e in validate(payload_with_sources(what_if=dict(WHAT_IF, method="measured"))))
