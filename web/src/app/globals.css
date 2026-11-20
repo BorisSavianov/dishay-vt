@@ -1,13 +1,22 @@
-/* Tokens. Light is the default; :root[data-theme='dark'] switches to the dark set.
-   The sidebar is dark navy in both themes, as in the design. */
+/* Tokens in the story's palette. :root is "day" (the story's clear chapters 7–8);
+   :root[data-theme='dark'] is "dusk" (chapter 1's night sky) and is the default (see lib/theme.ts).
+   The sidebar is dark glass in both themes. */
 :root {
   color-scheme: light;
-  --bg: #f1f2fa;
+  --bg: #eef0fc;
   --surface: #ffffff;
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-solid: #ffffff;
+  --glass-edge: rgba(255, 255, 255, 0.9);
+  --glow: rgba(79, 70, 229, 0.28);
+  --warm: #c2620f;
+  --title-grad: linear-gradient(180deg, #161a4d 25%, #5146d8 100%);
+  --sky-top: #dfe4ff;
+  --sky-horizon: #fbe8d8;
   --surface-2: #f6f6fd;
   --fg: #12163a;
-  --muted: #565c82;
-  --line: #e2e4f3;
+  --muted: #4a5078;
+  --line: #e0e3f4;
   --accent: #4f46e5;
   --accent-strong: #4338ca;
   --accent-soft: #e9e8fd;
@@ -19,9 +28,9 @@
   --pos-soft: #dcf4e8;
   --warn: #8a4b00;
   --focus: #1d4ed8;
-  --shadow: 0 1px 2px rgba(20, 24, 70, 0.05), 0 14px 34px -18px rgba(30, 35, 110, 0.22);
+  --shadow: 0 1px 2px rgba(20, 24, 70, 0.05), 0 22px 48px -26px rgba(30, 35, 110, 0.3);
   --grid: #e8eaf6;
-  --side-bg: #131435;
+  --side-bg: rgba(14, 15, 42, 0.92);
   --side-fg: #eceeff;
   --side-muted: #a9aedb;
   --side-hover: rgba(255, 255, 255, 0.07);
@@ -37,16 +46,24 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0b0c20;
-  --surface: #15163a;
-  --surface-2: #1b1d47;
-  --fg: #eef0ff;
-  --muted: #aeb4dc;
-  --line: #2b2e63;
-  --accent: #8b87ff;
-  --accent-strong: #a9a6ff;
-  --accent-soft: #26286c;
-  --accent-wash: linear-gradient(135deg, #25276b 0%, #1c1e52 100%);
+  --bg: #0a0b1e;
+  --surface: #14152e;
+  --surface-2: #1b1c45;
+  --glass: rgba(20, 21, 52, 0.62);
+  --glass-solid: #14152e;
+  --glass-edge: rgba(255, 255, 255, 0.12);
+  --glow: rgba(109, 102, 255, 0.45);
+  --warm: #ffb15c;
+  --title-grad: linear-gradient(180deg, #ffffff 30%, #c9cdf5 100%);
+  --sky-top: #080924;
+  --sky-horizon: #3a2443;
+  --fg: #f4f5ff;
+  --muted: #b9bde6;
+  --line: #2a2c5e;
+  --accent: #a5a1ff;
+  --accent-strong: #c4c1ff;
+  --accent-soft: #272766;
+  --accent-wash: linear-gradient(135deg, #2a2870 0%, #1b1c4d 100%);
   --on-accent: #0b0c20;
   --neg: #ff9aa2;
   --neg-soft: #3d1c2e;
@@ -54,9 +71,9 @@
   --pos-soft: #123a31;
   --warn: #fcd34d;
   --focus: #fde68a;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 14px 34px -18px rgba(0, 0, 0, 0.6);
-  --grid: #25285a;
-  --side-bg: #080919;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 24px 60px -30px rgba(0, 0, 0, 0.75);
+  --grid: #23265a;
+  --side-bg: rgba(8, 9, 28, 0.6);
   --t-pharmacy: #2dd4bf;
   --t-hospital: #fb7185;
   --t-clinic: #60a5fa;
@@ -179,6 +196,15 @@ button {
   background: var(--side-bg);
   color: var(--side-fg);
   overflow-y: auto;
+  border-right: 1px solid var(--side-line);
+  /* A faint indigo glow down the right edge, as the story's horizon light. */
+  box-shadow: inset -1px 0 0 rgba(165, 161, 255, 0.18), 18px 0 60px -40px rgba(109, 102, 255, 0.55);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .sidebar {
+    backdrop-filter: blur(22px) saturate(140%);
+  }
 }
 
 .brand {
@@ -235,9 +261,11 @@ button {
 }
 
 .side-nav a[aria-current='page'] {
-  background: #4f46e5;
+  background: linear-gradient(135deg, #5b52f0 0%, #4f46e5 100%);
   color: #ffffff;
-  box-shadow: 0 10px 22px -12px rgba(79, 70, 229, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 10px 30px -10px rgba(109, 102, 255, 0.85);
 }
 
 .side-spacer {
@@ -285,19 +313,33 @@ button {
 }
 
 .eyebrow {
-  font-size: 0.78rem;
-  letter-spacing: 0.14em;
+  font-size: 0.76rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
   font-weight: 600;
 }
 
 .page-title {
-  font-size: clamp(2rem, 4vw, 2.75rem);
-  line-height: 1.1;
-  letter-spacing: -0.025em;
+  font-size: clamp(2.1rem, 4.4vw, 3.1rem);
+  line-height: 1.06;
+  letter-spacing: -0.035em;
   font-weight: 800;
-  margin-top: 6px;
+  margin-top: 8px;
+  color: var(--fg);
+  /* The story's headline gradient, clipped on this element itself (Safari drops it on transformed children). */
+  background: var(--title-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  padding-bottom: 0.06em;
+}
+
+@supports not ((background-clip: text) or (-webkit-background-clip: text)) {
+  .page-title {
+    background: none;
+    -webkit-text-fill-color: currentColor;
+  }
 }
 
 .page-lead {
@@ -431,18 +473,31 @@ button {
   padding: 12px 16px;
   border-radius: 14px;
   border: 1px solid var(--line);
-  background: var(--surface);
+  background: var(--glass-solid);
   color: var(--warn);
 }
 
 /* ---------- Cards and grids ---------- */
 .card {
-  background: var(--surface);
+  background: var(--glass-solid);
   border: 1px solid var(--line);
   border-radius: 22px;
   padding: 22px;
-  box-shadow: var(--shadow);
+  /* A light hairline on the top edge, as glass catches the sky. */
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    var(--shadow);
   min-width: 0;
+}
+
+/* Frosted glass where the browser can blur what is behind it; elsewhere the opaque surface above. */
+@supports (backdrop-filter: blur(1px)) {
+  .card,
+  .notice,
+  .pill {
+    background: var(--glass);
+    backdrop-filter: blur(18px) saturate(140%);
+  }
 }
 
 .card-head {
@@ -1227,7 +1282,7 @@ button.legend-row[aria-pressed='false'] {
     grid-auto-flow: column;
     grid-auto-columns: minmax(0, 1fr);
     padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
-    background: var(--surface);
+    background: var(--glass-solid);
     border-top: 1px solid var(--line);
     box-shadow: 0 -10px 30px -20px rgba(20, 24, 70, 0.35);
   }
@@ -2183,5 +2238,15 @@ button.legend-row[aria-pressed='false'] {
     flex: none;
     width: 18px;
     height: 18px;
+  }
+}
+
+/* The phone tab bar is glass too, over the page and its backdrop. */
+@media (max-width: 860px) {
+  @supports (backdrop-filter: blur(1px)) {
+    .tabbar {
+      background: var(--glass);
+      backdrop-filter: blur(20px) saturate(140%);
+    }
   }
 }
