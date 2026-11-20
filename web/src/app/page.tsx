@@ -35,7 +35,7 @@ export default async function AirNow({ searchParams }: { searchParams: Params })
   const hourly = (station.hourly ?? []).filter((h) => new Date(h.t).getTime() >= now.getTime() - 3600_000);
   const days = station.daily.filter((d) => d.date >= today).slice(0, 3);
   const { mae } = forecast.model;
-  const modelReady = forecast.model.name !== 'demo' && mae.model > 0;
+  const modelReady = source !== 'demo' && mae.model > 0;
 
   // Stations grouped by city, the featured city first, so the picker reads like a list of places.
   const featuredCity = featuredStation(forecast).city;
