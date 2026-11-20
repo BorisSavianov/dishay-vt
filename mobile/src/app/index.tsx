@@ -7,6 +7,7 @@ import { bestWindow, clampLevel, LEVEL_COLORS, levelNow, levelTextColor, localDa
 import { useAir } from '../aq/store';
 import { advice, air, levelName, profileName } from '../aq/strings';
 import { Card, CardTitle, Columns, Note } from '../components/Card';
+import { ExplainCard } from '../components/ExplainCard';
 import { ForecastChart } from '../components/ForecastChart';
 import { Icon } from '../components/Icon';
 import { Screen } from '../components/Screen';
@@ -189,6 +190,8 @@ export default function AirScreen() {
               </View>
             </Card>
 
+            {/* The server explains its own forecast, so the card would contradict the demo numbers. */}
+            {source === 'live' ? <ExplainCard station={home.id} profile={prefs.profile} lang={lang} /> : null}
           </>
         }
       />

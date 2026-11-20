@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { air } from '../aq/strings';
@@ -14,12 +14,15 @@ import { Glass } from './Glass';
 import { BrandMark, Icon } from './Icon';
 
 // Soft colour fields behind the content, so the glass cards have something to refract.
+// Sized from the window, not absoluteFill: an SVG laid out once keeps its first size, so a tab that was open
+// while the iPhone Duo unfolded kept the narrow backdrop. The key redraws it on every window size.
 function Backdrop({ accent }: { accent?: string }) {
   const { mode, colors: c } = useColorMode();
+  const { width, height } = useWindowDimensions();
   const a = accent ?? c.accent;
   const o = mode === 'dark' ? 0.35 : 0.22;
   return (
-    <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Svg key={`${width}x${height}`} width={width} height={height} style={styles.backdrop} pointerEvents="none">
       <Defs>
         <RadialGradient id="g1" cx="12%" cy="8%" r="60%">
           <Stop offset="0" stopColor={a} stopOpacity={o} />
@@ -135,6 +138,7 @@ export function Screen({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  backdrop: { position: 'absolute', top: 0, left: 0 },
   content: { width: '100%', maxWidth: CONTENT_MAX, alignSelf: 'center', paddingBottom: 32 },
   bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
