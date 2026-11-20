@@ -8,6 +8,7 @@ and the CAMS Europe forecast (cached for 3 h), and the models from ml.aq_train."
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import datetime as dt
 import json
 import sys
@@ -154,6 +155,22 @@ def load_models() -> tuple[dict, dict]:
     return models, meta
 
 
+def extend_cams(arr: np.ndarray, period: int = 24) -> np.ndarray:
+    """CAMS Europe stops about 3 days out. Past its last value the model would read NaN, which it never saw in
+    training, and the forecast jumped (2.2 → 8.3 µg/m³ at hour 64). For the model's inputs only, each cell's hours
+    after its last value repeat the hours `period` earlier (the last forecast day). Interior gaps stay NaN."""
+    out = np.array(arr, dtype=float, copy=True)
+    for c in range(out.shape[1]):
+        ok = np.flatnonzero(~np.isnan(out[:, c]))
+        if not len(ok):
+            continue
+        last = int(ok[-1])
+        p = min(period, last + 1)
+        for t in range(last + 1, len(out)):
+            out[t, c] = out[t - p, c]
+    return out
+
+
 def pick_stations(panel, i: int) -> np.ndarray:
     """Columns with a reading in the last 6 h, one per OSM location (co-located sensors collapse)."""
     recent = ~np.isnan(panel.pm25[max(0, i - 5) : i + 1]).all(axis=0)
@@ -209,10 +226,12 @@ def run_once(write_db: bool = True) -> dict:
     ii = np.repeat(np.full(len(cols), i), len(H))
     ss = np.repeat(cols, len(H))
     hh = np.tile(H, len(cols))
-    X = features(panel, d, ii, ss, np.minimum(hh, HOURS_OUT))
+    # The model's inputs see CAMS extended past its horizon; the payload and the live log keep the real CAMS.
+    fpanel = dataclasses.replace(panel, cams25=extend_cams(panel.cams25), cams10=extend_cams(panel.cams10))
+    X = features(fpanel, d, ii, ss, np.minimum(hh, HOURS_OUT))
     # Weather, CAMS and the calendar must still be read at the real target hour past 72 h.
     if HOURS_DAILY > HOURS_OUT:
-        X_true = features(panel, d, ii, ss, hh)
+        X_true = features(fpanel, d, ii, ss, hh)
         past = hh > HOURS_OUT
         keep_cols = [f for f in FEATURES if not f.startswith(("pm25_", "pm10_", "nb_")) and f not in ("horizon_h", "obs_vs_cams")]
         X.loc[past, keep_cols] = X_true.loc[past, keep_cols]
