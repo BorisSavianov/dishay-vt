@@ -31,11 +31,11 @@ export type LiveMapLabels = {
 type Data = GeoJSONSourceSpecification['data'];
 
 // Free vector tiles from OpenFreeMap: no key, OpenStreetMap data. Light and dark follow the site theme.
-const STYLE: Record<Theme, string> = {
+export const STYLE: Record<Theme, string> = {
   light: 'https://tiles.openfreemap.org/styles/positron',
   dark: 'https://tiles.openfreemap.org/styles/fiord',
 };
-const ATTRIBUTION =
+export const ATTRIBUTION =
   '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> ' +
   '<a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">© OpenMapTiles</a> ' +
   'Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
@@ -48,12 +48,12 @@ const WORLD = [
   [-180, -85],
 ];
 
-function cssVar(name: string, fallback: string): string {
+export function cssVar(name: string, fallback: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
 // MapLibre cannot read CSS variables, so the type colours are read from the active theme.
-function colourOf(type: string): string {
+export function colourOf(type: string): string {
   const v = typeColor(type);
   const m = /^var\((--[\w-]+)\)$/.exec(v);
   return m ? cssVar(m[1]!, '#64748b') : v;
@@ -77,7 +77,7 @@ function featuresOf(points: Point[], hidden: Set<string>): Data {
   };
 }
 
-function popupNode(lang: Lang, p: Point): HTMLElement {
+export function popupNode(lang: Lang, p: Point): HTMLElement {
   const d = pinDetails(lang, p);
   const root = document.createElement('div');
   root.className = 'map-popup';

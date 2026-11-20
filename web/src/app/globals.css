@@ -1554,3 +1554,128 @@ button.legend-row[aria-pressed='false'] {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- Air map ---------- */
+.station-map .map-canvas {
+  margin-bottom: 14px;
+}
+
+.time-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.play-btn {
+  min-width: 104px;
+  min-height: 44px;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.play-btn span {
+  display: inline-block;
+  width: 1.2em;
+  font-size: 0.85em;
+}
+
+.time-slider {
+  display: grid;
+  flex: 1 1 260px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.time-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-readout strong {
+  font-size: 1.1rem;
+}
+
+.time-readout span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.time-slider input[type='range'] {
+  width: 100%;
+  min-height: 28px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.level-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 14px 0 6px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.88rem;
+}
+
+.level-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.level-legend .swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+.level-legend .num {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.map-popup .level-chip {
+  width: fit-content;
+  justify-self: start;
+  margin: 8px 0 6px;
+  font-size: 0.82rem;
+  padding: 3px 10px;
+}
+
+@media (max-width: 560px) {
+  .time-bar {
+    padding: 12px;
+  }
+  .time-bar .seg {
+    flex: 1 1 auto;
+  }
+}
+
+.level-legend .swatch-health {
+  background: var(--surface);
+  border: 1.5px solid var(--fg);
+  opacity: 0.75;
+}
