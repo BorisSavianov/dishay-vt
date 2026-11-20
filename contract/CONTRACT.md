@@ -94,14 +94,53 @@ Train, commit `web/src/model/model.json`, deploy. The routes and the clients do 
 
 ## Air quality (forecast)
 
-Shape and rules: `docs/hackathon-plan.md` ("Shared contract"). The mobile types are in `mobile/src/aq/types.ts`.
+Written by `ml/aq_forecast.py` on Teodor's PC every hour, upserted into Neon and served by `/api/aq`. The bundled fallback is `web/src/data/aq_forecast.json` (the same shape; a mock from `python -m ml.aq_mock` until the real one is committed at the freeze). Types: `mobile/src/aq/types.ts`. Shape check: `ml/aq_contract.py`.
+
+```jsonc
+{
+  "generated_at": "2026-11-20T11:00:00+02:00",
+  "model": { "name": "lgbm-v1", "kind": "trained",          // "mock" for demo data: label it as such
+             "trained_rows": 6100000, "sensors": 310, "holdout": "winter 2025/26",
+             "mae": { "model": 6.1, "cams": 9.8, "persistence": 8.4 },   // µg/m³, PM2.5, 24 h horizon, holdout
+             "exceedance_f1": { "model": 0.78, "cams": 0.55 } },        // next-day PM10 mean > 50
+  "stations": [{
+    "id": "sc-35767", "name": "ВТ – Център", "city": "Велико Търново", "featured": true,
+    "lat": 43.0786, "lon": 25.6211,
+    "latest": { "t": "2026-11-20T10:55:00+02:00", "pm25": 18.2, "pm10": 31.0 },   // or null
+    "hourly": [ { "t": "2026-11-20T11:00:00+02:00", "pm25": 19.1, "pm10": 33.0,
+                  "pm25_lo": 14.0, "pm25_hi": 25.0, "cams_pm25": 16.0 } ],      // 72 items, next hour first
+    "daily": [ { "date": "2026-11-21", "pm10_mean": 58.0, "pm25_mean": 34.0, "level": 3,
+                 "exceeds_eu_limit": true,
+                 "reasons": [ { "feature": "pbl_height", "label_bg": "нисък слой на смесване (инверсия)",
+                                "label_en": "low mixing layer (inversion)", "impact": 11.2 } ] } ]  // 3 days
+  }]
+}
+```
+
+- Times are local (`Europe/Sofia`, `+02:00` in winter) with the offset. `daily[].date` is a local calendar date; the 3 days are tomorrow, +2 and +3 (today is in `hourly`).
+- Values are µg/m³, one decimal. Sensor values are humidity-corrected (SDS011 and similar over-read in fog); `cams_pm25` is the raw CAMS Europe forecast at the station.
+- `pm25_lo` / `pm25_hi` are the 10th and 90th percentiles. `lo <= pm25 <= hi` always.
+- `level` is the EEA EAQI 1..6 of the daily means: the worse of the PM2.5 and PM10 bands. Band edges: `mobile/src/aq/levels.ts` (`PM25_BANDS`, `PM10_BANDS`); `ml/aq_levels.py` mirrors them and a test fails if they drift. The web should use the same numbers.
+- `exceeds_eu_limit` is `pm10_mean > 50`.
+- `reasons`: up to 3 per day, largest `|impact|` first. `impact` is the µg/m³ the feature group adds (positive) or removes (negative) from the day's PM2.5. `feature` is one of `pbl_height`, `wind_speed`, `temp`, `rh`, `precip`, `persistence`, `neighbours`, `cams`, `calendar`. `label_en` is optional.
+- Ids: `sc-<sensor.community sensor id>`. `featured` marks the Veliko Tarnovo stations shown first.
+
+### Neon table
+
+```sql
+create table if not exists aq_forecast (
+  id text primary key,                 -- '_model' or a station id
+  generated_at timestamptz not null,
+  payload jsonb not null               -- '_model': { generated_at, model }; station rows: one AqStation
+);
+```
+
+Each run replaces all rows in one transaction (stations missing from the run are deleted), so a reader never sees two runs mixed. `/api/aq` = the `_model` row plus all station rows; fall back to the bundled JSON when the table is empty or the query fails, as `loadDatasets` does. Note: the app reads `DATABASE_URL`; the Vercel Postgres integration only sets `POSTGRES_URL`, so set `DATABASE_URL` in Vercel too.
 
 ### `GET /api/aq`
 
-The whole forecast: `{ generated_at, model, stations[] }`. Stations may leave out `hourly` to keep the response small; `daily` (3 days) and `latest` are always present. `404` or an error makes the app fall back to its labelled demo data.
+`{ generated_at, model, stations[] }`. Stations leave out `hourly` to keep the response small; `daily` (3 days) and `latest` are always present. `404` or an error makes the apps fall back to their labelled demo data.
 
 ### `GET /api/aq/<station id>`
 
-One station with `hourly` (72 items). The app calls it only for the home station when the list has no `hourly`.
-
-Levels are EEA EAQI 1..6. Band edges live in `mobile/src/aq/levels.ts` (`PM25_BANDS`, `PM10_BANDS`); the web should use the same numbers.
+One `AqStation` with `hourly` (72 items). `404` for an unknown id.
