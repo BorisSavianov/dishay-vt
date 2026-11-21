@@ -18,3 +18,5 @@ web/.env*
 # ML reports (metrics per training run)
 ml/reports/
 .pytest_cache/
+.vercel
+.env*
